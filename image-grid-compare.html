@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Activity images — ranks 1–8 compare</title>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --panel: #1a2332;
+      --text: #e8eef7;
+      --muted: #8b9bb4;
+      --accent: #3d8bfd;
+      --rank1: #3fb950;
+      --pick: #a371f7;
+      --border: #2d3a4f;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.45;
+    }
+    header {
+      padding: 1rem 1.25rem;
+      border-bottom: 1px solid var(--border);
+      background: var(--panel);
+    }
+    header h1 { margin: 0 0 0.35rem; font-size: 1.1rem; font-weight: 600; }
+    header p { margin: 0; color: var(--muted); font-size: 0.85rem; }
+    main { max-width: 1400px; margin: 0 auto; padding: 1.25rem; }
+    .row { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: flex-end; margin-bottom: 1rem; }
+    label { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.75rem; color: var(--muted); }
+    select, input[type="file"], button {
+      background: var(--panel);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.45rem 0.65rem;
+      font-size: 0.9rem;
+    }
+    button { cursor: pointer; font-weight: 500; }
+    button:hover { border-color: var(--accent); }
+    button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .hidden { display: none !important; }
+    .err { color: #f85149; font-size: 0.85rem; margin-top: 0.5rem; }
+    .stage {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1rem;
+    }
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+    .meta strong { font-size: 1.05rem; }
+    .meta .hint { color: var(--muted); font-size: 0.85rem; max-width: 42rem; }
+    .verdict {
+      font-size: 0.9rem;
+      padding: 0.5rem 0.75rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+    }
+    .verdict.match { border-color: var(--rank1); color: var(--rank1); }
+    .verdict.diff { border-color: #d29922; color: #e3b341; }
+    .verdict.empty { color: var(--muted); }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(8, minmax(0, 1fr));
+      gap: 0.5rem;
+    }
+    @media (max-width: 1200px) {
+      .grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    }
+    @media (max-width: 640px) {
+      .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    .cell {
+      position: relative;
+      border: 2px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+      background: #0b0f14;
+      cursor: pointer;
+      min-height: 120px;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .cell:hover { border-color: var(--accent); }
+    .cell.rank1 {
+      border-color: var(--rank1);
+      box-shadow: 0 0 0 1px rgba(63, 185, 80, 0.35);
+    }
+    .cell.picked {
+      border-color: var(--pick);
+      box-shadow: 0 0 0 2px rgba(163, 113, 247, 0.5);
+    }
+    .cell.empty {
+      cursor: default;
+      opacity: 0.45;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--muted);
+      font-size: 0.75rem;
+    }
+    .cell img {
+      display: block;
+      width: 100%;
+      height: 140px;
+      object-fit: cover;
+    }
+    @media (min-width: 900px) {
+      .cell img { height: 160px; }
+    }
+    .badge {
+      position: absolute;
+      top: 4px;
+      left: 4px;
+      font-size: 0.65rem;
+      font-weight: 700;
+      padding: 0.2rem 0.4rem;
+      border-radius: 4px;
+      background: rgba(0, 0, 0, 0.65);
+      color: #fff;
+      z-index: 1;
+    }
+    .badge.r1 { background: var(--rank1); color: #0f1419; }
+    .badge.score { left: auto; right: 4px; font-weight: 500; }
+    .cell .pick-dot {
+      position: absolute;
+      bottom: 6px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--pick);
+      opacity: 0;
+    }
+    .cell.picked .pick-dot { opacity: 1; }
+    .nav-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      align-items: center;
+      justify-content: center;
+      margin-top: 1rem;
+    }
+    footer { color: var(--muted); font-size: 0.8rem; margin-top: 1rem; }
+    a { color: var(--accent); }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Activity images — ranks 1–8</h1>
+    <p>
+      For each activity, all eight ranks appear together. <strong>Rank 1</strong> is highlighted in green. Click your
+      <strong>favourite</strong> (or press keys <strong>1–8</strong>) to compare with the sheet’s top rank — then the view
+      <strong>moves to the next activity</strong> automatically (last activity stays put).
+    </p>
+  </header>
+  <main>
+    <section id="setup">
+      <div class="row">
+        <label>Spreadsheet
+          <input id="file" type="file" accept=".csv,.xlsx,.xls" />
+        </label>
+        <label>Sheet (Excel only)
+          <select id="sheetName" disabled></select>
+        </label>
+        <button type="button" id="btnLoad" class="primary">Parse &amp; pick columns</button>
+      </div>
+      <div id="mapRow" class="row hidden">
+        <label>Activity ID column
+          <select id="colActivity"></select>
+        </label>
+        <label>Image URL column
+          <select id="colImage"></select>
+        </label>
+        <label>Quality score (optional)
+          <select id="colScore"></select>
+        </label>
+        <label>Rank column (1–8 per image)
+          <select id="colRank"></select>
+        </label>
+        <button type="button" id="btnStart" class="primary">Build grid view</button>
+      </div>
+      <div id="error" class="err" role="alert"></div>
+    </section>
+
+    <section id="viewer" class="hidden">
+      <div class="stage">
+        <div class="meta">
+          <div>
+            <strong id="actLabel">—</strong>
+            <div class="hint" id="idxLabel">Green = Rank 1 · Purple = your pick · Choosing a favourite advances to the next activity</div>
+          </div>
+          <div id="verdict" class="verdict empty">Pick an image (click or press 1–8).</div>
+        </div>
+        <div id="grid" class="grid" aria-label="Images rank 1 through 8"></div>
+        <div class="nav-row">
+          <button type="button" id="btnPrev">Previous activity</button>
+          <button type="button" id="btnNext">Next activity</button>
+          <button type="button" id="btnClearPick">Clear favourite</button>
+          <button type="button" id="btnExport" class="primary">Download picks (JSON)</button>
+        </div>
+      </div>
+      <footer>
+        Only ranks <strong>1–8</strong> are shown. Picking a favourite (click or 1–8) <strong>advances</strong> to the next activity; click the same image again to clear without advancing. <strong>Clear favourite</strong> does not advance. Data stays in your browser.
+      </footer>
+    </section>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const SKIP = "__skip__";
+    const fileInput = $("file");
+    const sheetSelect = $("sheetName");
+    const btnLoad = $("btnLoad");
+    const mapRow = $("mapRow");
+    const colActivity = $("colActivity");
+    const colImage = $("colImage");
+    const colScore = $("colScore");
+    const colRank = $("colRank");
+    const btnStart = $("btnStart");
+    const errBox = $("error");
+    const setup = $("setup");
+    const viewer = $("viewer");
+    const actLabel = $("actLabel");
+    const idxLabel = $("idxLabel");
+    const gridEl = $("grid");
+    const verdictEl = $("verdict");
+    const btnPrev = $("btnPrev");
+    const btnNext = $("btnNext");
+    const btnClearPick = $("btnClearPick");
+    const btnExport = $("btnExport");
+
+    let workbook = null;
+    let rawRows = [];
+    let headers = [];
+    let fileName = "";
+    /** @type {{ activityId: string, slots: (null | { rank: number, imageUrl: string, qualityScore: number | null, raw: object })[] }[]} */
+    let activities = [];
+    let cursor = 0;
+    /** @type {Record<string, number | null>} activityId -> favourite rank 1-8 or null */
+    let picks = {};
+
+    function setError(msg) {
+      errBox.textContent = msg || "";
+    }
+
+    function guessColumn(headers, patterns) {
+      const lower = headers.map((h) => String(h || "").toLowerCase());
+      for (const p of patterns) {
+        const i = lower.findIndex((h) => h.includes(p));
+        if (i >= 0) return headers[i];
+      }
+      return "";
+    }
+
+    function parseCSV(text) {
+      const rows = [];
+      let i = 0;
+      const field = () => {
+        let s = "";
+        if (text[i] === '"') {
+          i++;
+          while (i < text.length) {
+            if (text[i] === '"' && text[i + 1] === '"') {
+              s += '"';
+              i += 2;
+            } else if (text[i] === '"') {
+              i++;
+              break;
+            } else {
+              s += text[i++];
+            }
+          }
+        } else {
+          while (i < text.length && text[i] !== "," && text[i] !== "\n" && text[i] !== "\r") {
+            s += text[i++];
+          }
+        }
+        return s;
+      };
+      const line = () => {
+        const r = [];
+        while (i < text.length) {
+          r.push(field());
+          if (text[i] === ",") {
+            i++;
+            continue;
+          }
+          if (text[i] === "\r") i++;
+          if (text[i] === "\n") {
+            i++;
+            break;
+          }
+          if (i >= text.length) break;
+        }
+        return r;
+      };
+      const headerLine = line();
+      if (!headerLine.length) return { headers: [], rows: [] };
+      const hdr = headerLine.map((h) => h.trim());
+      while (i < text.length) {
+        const r = line();
+        if (r.every((c) => String(c).trim() === "")) continue;
+        const obj = {};
+        hdr.forEach((h, j) => (obj[h] = r[j] !== undefined ? r[j] : ""));
+        rows.push(obj);
+      }
+      return { headers: hdr, rows };
+    }
+
+    function fillSelect(sel, cols, includeEmpty) {
+      sel.innerHTML = "";
+      if (includeEmpty) {
+        const o = document.createElement("option");
+        o.value = SKIP;
+        o.textContent = "— none —";
+        sel.appendChild(o);
+      }
+      for (const c of cols) {
+        const o = document.createElement("option");
+        o.value = c;
+        o.textContent = c;
+        sel.appendChild(o);
+      }
+    }
+
+    btnLoad.addEventListener("click", () => {
+      setError("");
+      const f = fileInput.files[0];
+      if (!f) {
+        setError("Choose a .csv or .xlsx file first.");
+        return;
+      }
+      fileName = f.name;
+      const ext = f.name.split(".").pop().toLowerCase();
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          if (ext === "csv") {
+            const text = String(e.target.result);
+            const { headers: h, rows } = parseCSV(text);
+            headers = h;
+            rawRows = rows;
+            sheetSelect.innerHTML = "";
+            sheetSelect.disabled = true;
+          } else {
+            const data = new Uint8Array(e.target.result);
+            workbook = XLSX.read(data, { type: "array" });
+            sheetSelect.innerHTML = "";
+            workbook.SheetNames.forEach((name) => {
+              const o = document.createElement("option");
+              o.value = name;
+              o.textContent = name;
+              sheetSelect.appendChild(o);
+            });
+            sheetSelect.disabled = workbook.SheetNames.length <= 1;
+            if (workbook.SheetNames.length) {
+              sheetSelect.value = workbook.SheetNames[0];
+              loadSheet(workbook.SheetNames[0]);
+            }
+          }
+          afterParse();
+        } catch (ex) {
+          setError(String(ex.message || ex));
+        }
+      };
+      if (ext === "csv") reader.readAsText(f);
+      else reader.readAsArrayBuffer(f);
+    });
+
+    sheetSelect.addEventListener("change", () => {
+      if (!workbook) return;
+      loadSheet(sheetSelect.value);
+      afterParse();
+    });
+
+    function loadSheet(name) {
+      const ws = workbook.Sheets[name];
+      const json = XLSX.utils.sheet_to_json(ws, { defval: "" });
+      rawRows = json;
+      headers = json.length ? Object.keys(json[0]) : [];
+    }
+
+    function afterParse() {
+      if (!headers.length) {
+        setError("No columns found.");
+        return;
+      }
+      fillSelect(colActivity, headers, false);
+      fillSelect(colImage, headers, false);
+      fillSelect(colScore, headers, true);
+      fillSelect(colRank, headers, false);
+
+      const gAct = guessColumn(headers, ["activity_id", "activity", "act_id", "activityid", "master_code", "id"]);
+      const gImg = guessColumn(headers, ["pix_url", "image", "url", "photo", "picture", "thumb", "link"]);
+      const gScore = guessColumn(headers, ["quality_score", "score", "quality", "rank_score"]);
+      const gRank = guessColumn(headers, ["rank", "image_number"]);
+
+      if (gAct) colActivity.value = gAct;
+      if (gImg) colImage.value = gImg;
+      if (gScore) colScore.value = gScore;
+      if (gRank) colRank.value = gRank;
+
+      mapRow.classList.remove("hidden");
+    }
+
+    function numOrNull(v) {
+      if (v === "" || v === null || v === undefined) return null;
+      const n = Number(String(v).replace(/,/g, "").trim());
+      return Number.isFinite(n) ? n : null;
+    }
+
+    function isUrl(s) {
+      const t = String(s || "").trim();
+      return /^https?:\/\//i.test(t);
+    }
+
+    btnStart.addEventListener("click", () => {
+      setError("");
+      const kAct = colActivity.value;
+      const kImg = colImage.value;
+      const kScore = colScore.value === SKIP ? null : colScore.value;
+      const kRank = colRank.value;
+      if (!kAct || !kImg || !kRank) {
+        setError("Pick Activity ID, Image URL, and Rank columns.");
+        return;
+      }
+
+      /** @type {Map<string, Map<number, { rank: number, imageUrl: string, qualityScore: number | null, raw: object }>>} */
+      const byAct = new Map();
+
+      for (const row of rawRows) {
+        const act = String(row[kAct] ?? "").trim();
+        const url = String(row[kImg] ?? "").trim();
+        const rank = numOrNull(row[kRank]);
+        if (!act || !isUrl(url) || rank == null || rank < 1 || rank > 8) continue;
+        const score = kScore ? numOrNull(row[kScore]) : null;
+        const entry = { rank, imageUrl: url, qualityScore: score, raw: row };
+        if (!byAct.has(act)) byAct.set(act, new Map());
+        const m = byAct.get(act);
+        if (!m.has(rank)) m.set(rank, entry);
+        else {
+          const prev = m.get(rank);
+          const ps = prev.qualityScore;
+          const cs = score;
+          if (cs != null && (ps == null || cs > ps)) m.set(rank, entry);
+        }
+      }
+
+      const list = [];
+      for (const [activityId, rankMap] of byAct) {
+        const slots = /** @type {(null | { rank: number, imageUrl: string, qualityScore: number | null, raw: object })[]} */ (
+          Array.from({ length: 8 }, (_, i) => {
+            const r = i + 1;
+            return rankMap.has(r) ? rankMap.get(r) : null;
+          })
+        );
+        if (slots.some(Boolean)) list.push({ activityId, slots });
+      }
+
+      if (!list.length) {
+        setError("No rows with activity, http(s) URL, and rank between 1 and 8.");
+        return;
+      }
+
+      list.sort((a, b) => String(a.activityId).localeCompare(String(b.activityId)));
+      activities = list;
+
+      const storageKey = `activity-img-grid8:${fileName}:${activities.length}`;
+      try {
+        const saved = localStorage.getItem(storageKey);
+        if (saved) picks = JSON.parse(saved);
+      } catch {
+        picks = {};
+      }
+      window.__gridStorageKey = storageKey;
+
+      cursor = 0;
+      setup.classList.add("hidden");
+      viewer.classList.remove("hidden");
+      render();
+    });
+
+    function persistPicks() {
+      const key = window.__gridStorageKey;
+      if (!key) return;
+      try {
+        localStorage.setItem(key, JSON.stringify(picks));
+      } catch {
+        /* ignore */
+      }
+    }
+
+    function updateVerdict() {
+      const act = activities[cursor]?.activityId;
+      if (!act) return;
+      const fav = picks[act];
+      const slot1 = activities[cursor].slots[0];
+
+      verdictEl.classList.remove("match", "diff", "empty");
+      if (fav == null) {
+        verdictEl.textContent = "Pick an image (click or press 1–8).";
+        verdictEl.classList.add("empty");
+        return;
+      }
+      if (!slot1) {
+        verdictEl.textContent =
+          "Your favourite: Rank " + fav + ". This activity has no Rank 1 image in the sheet — cannot compare.";
+        verdictEl.classList.add("diff");
+        return;
+      }
+      if (fav === 1) {
+        verdictEl.textContent = "Your favourite is Rank 1 — matches the sheet’s top-ranked image.";
+        verdictEl.classList.add("match");
+      } else {
+        verdictEl.textContent =
+          "Your favourite: Rank " +
+          fav +
+          ". Sheet Rank 1 is the green frame. They differ — worth a second look at the scoring.";
+        verdictEl.classList.add("diff");
+      }
+    }
+
+    function render() {
+      const item = activities[cursor];
+      if (!item) return;
+      actLabel.textContent = "Activity: " + item.activityId;
+      idxLabel.textContent =
+        "Activity " +
+        (cursor + 1) +
+        " of " +
+        activities.length +
+        " · Green = Rank 1 · Purple = your pick · Picking advances to next";
+
+      const fav = picks[item.activityId] ?? null;
+      gridEl.innerHTML = "";
+      for (let i = 0; i < 8; i++) {
+        const rank = i + 1;
+        const slot = item.slots[i];
+        const cell = document.createElement("div");
+        cell.className = "cell" + (rank === 1 && slot ? " rank1" : "") + (fav === rank && slot ? " picked" : "");
+        cell.dataset.rank = String(rank);
+        cell.tabIndex = slot ? 0 : -1;
+        cell.setAttribute("role", slot ? "button" : "presentation");
+
+        const badge = document.createElement("span");
+        badge.className = "badge" + (rank === 1 ? " r1" : "");
+        badge.textContent = "Rank " + rank;
+        cell.appendChild(badge);
+
+        if (slot && slot.qualityScore != null) {
+          const sc = document.createElement("span");
+          sc.className = "badge score";
+          sc.textContent = String(slot.qualityScore);
+          cell.appendChild(sc);
+        }
+
+        if (slot) {
+          const img = document.createElement("img");
+          img.src = slot.imageUrl;
+          img.alt = "Rank " + rank;
+          img.loading = "lazy";
+          cell.appendChild(img);
+          const dot = document.createElement("div");
+          dot.className = "pick-dot";
+          cell.appendChild(dot);
+          cell.addEventListener("click", () => setPick(rank));
+        } else {
+          cell.classList.add("empty");
+          cell.textContent = "No rank " + rank;
+        }
+
+        gridEl.appendChild(cell);
+      }
+
+      updateVerdict();
+    }
+
+    function setPick(rank) {
+      const item = activities[cursor];
+      if (!item || !item.slots[rank - 1]) return;
+      const act = item.activityId;
+      if (picks[act] === rank) {
+        picks[act] = null;
+        persistPicks();
+        render();
+        return;
+      }
+      picks[act] = rank;
+      persistPicks();
+      if (cursor < activities.length - 1) cursor += 1;
+      render();
+    }
+
+    btnClearPick.addEventListener("click", () => {
+      const item = activities[cursor];
+      if (item) {
+        picks[item.activityId] = null;
+        persistPicks();
+        render();
+      }
+    });
+
+    btnPrev.addEventListener("click", () => {
+      cursor = Math.max(0, cursor - 1);
+      render();
+    });
+    btnNext.addEventListener("click", () => {
+      cursor = Math.min(activities.length - 1, cursor + 1);
+      render();
+    });
+
+    btnExport.addEventListener("click", () => {
+      const out = activities.map((a) => {
+        const fav = Object.prototype.hasOwnProperty.call(picks, a.activityId) ? picks[a.activityId] : null;
+        const s1 = a.slots[0];
+        return {
+          activityId: a.activityId,
+          favouriteRank: fav,
+          favouriteMatchesRank1: fav === 1,
+          rank1ImageUrl: s1 ? s1.imageUrl : null,
+          rank1QualityScore: s1 ? s1.qualityScore : null,
+          ranks: a.slots.map((s, i) =>
+            s
+              ? { rank: i + 1, imageUrl: s.imageUrl, qualityScore: s.qualityScore }
+              : { rank: i + 1, imageUrl: null, qualityScore: null },
+          ),
+        };
+      });
+      const blob = new Blob([JSON.stringify(out, null, 2)], { type: "application/json" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "image-grid-picks-" + fileName.replace(/[^\w.-]+/g, "_") + ".json";
+      a.click();
+      URL.revokeObjectURL(a.href);
+    });
+
+    window.addEventListener("keydown", (ev) => {
+      if (viewer.classList.contains("hidden")) return;
+      if (["INPUT", "SELECT", "TEXTAREA"].includes(ev.target.tagName)) return;
+      const d = ev.key;
+      if (d >= "1" && d <= "8") {
+        ev.preventDefault();
+        setPick(Number(d));
+      }
+    });
+  </script>
+</body>
+</html>

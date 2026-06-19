@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Activity image review</title>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --panel: #1a2332;
+      --text: #e8eef7;
+      --muted: #8b9bb4;
+      --accent: #3d8bfd;
+      --bad: #f85149;
+      --good: #3fb950;
+      --border: #2d3a4f;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.45;
+    }
+    header {
+      padding: 1rem 1.25rem;
+      border-bottom: 1px solid var(--border);
+      background: var(--panel);
+    }
+    header h1 {
+      margin: 0 0 0.35rem;
+      font-size: 1.1rem;
+      font-weight: 600;
+    }
+    header p { margin: 0; color: var(--muted); font-size: 0.85rem; }
+    main { max-width: 1100px; margin: 0 auto; padding: 1.25rem; }
+    .row { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: flex-end; margin-bottom: 1rem; }
+    label { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.75rem; color: var(--muted); }
+    select, input[type="file"], button {
+      background: var(--panel);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.45rem 0.65rem;
+      font-size: 0.9rem;
+    }
+    button {
+      cursor: pointer;
+      font-weight: 500;
+    }
+    button:hover { border-color: var(--accent); }
+    button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+    button.danger { background: transparent; border-color: var(--bad); color: var(--bad); }
+    button.success { background: transparent; border-color: var(--good); color: var(--good); }
+    .hidden { display: none !important; }
+    .stage {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1rem;
+      min-height: 420px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1rem;
+    }
+    .meta {
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+    .meta strong { font-size: 1rem; }
+    .meta span { color: var(--muted); font-size: 0.85rem; }
+    .img-wrap {
+      flex: 1;
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 320px;
+      background: #0b0f14;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .img-wrap img {
+      max-width: 100%;
+      max-height: min(62vh, 560px);
+      object-fit: contain;
+    }
+    .controls {
+      display: flex;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+      justify-content: center;
+      width: 100%;
+    }
+    .controls button { min-width: 120px; padding: 0.65rem 1rem; }
+    .pill {
+      display: inline-block;
+      padding: 0.15rem 0.5rem;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      border: 1px solid var(--border);
+      color: var(--muted);
+    }
+    .pill.up { border-color: var(--good); color: var(--good); }
+    .pill.down { border-color: var(--bad); color: var(--bad); }
+    .err { color: var(--bad); font-size: 0.85rem; margin-top: 0.5rem; }
+    footer { color: var(--muted); font-size: 0.8rem; margin-top: 1.5rem; }
+    a { color: var(--accent); }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Activity image review</h1>
+    <p>
+      Load your sheet, map columns. Only rows with <strong>rank = 1</strong> are shown. Thumbs up or down saves your vote and
+      moves to the next slide automatically.
+    </p>
+  </header>
+  <main>
+    <section id="setup">
+      <div class="row">
+        <label>Spreadsheet
+          <input id="file" type="file" accept=".csv,.xlsx,.xls" />
+        </label>
+        <label>Sheet (Excel only)
+          <select id="sheetName" disabled></select>
+        </label>
+        <button type="button" id="btnLoad" class="primary">Parse &amp; pick columns</button>
+      </div>
+      <div id="mapRow" class="row hidden">
+        <label>Activity ID column
+          <select id="colActivity"></select>
+        </label>
+        <label>Image URL column
+          <select id="colImage"></select>
+        </label>
+        <label>Quality score (optional, higher = better)
+          <select id="colScore"></select>
+        </label>
+        <label>Rank column (required — only rows where rank = 1 are included)
+          <select id="colRank"></select>
+        </label>
+        <button type="button" id="btnStart" class="primary">Build slideshow</button>
+      </div>
+      <div id="error" class="err" role="alert"></div>
+    </section>
+
+    <section id="viewer" class="hidden">
+      <div class="stage">
+        <div class="meta">
+          <div>
+            <strong id="actLabel">—</strong>
+            <span id="idxLabel"></span>
+          </div>
+          <div>
+            <span id="votePill" class="pill">not voted</span>
+          </div>
+        </div>
+        <div class="img-wrap">
+          <img id="hero" alt="" />
+        </div>
+        <div class="controls">
+          <button type="button" class="danger" id="btnDown">👎 Thumbs down <span class="muted">(←)</span></button>
+          <button type="button" id="btnSkip">Skip / clear <span class="muted">(↓)</span></button>
+          <button type="button" class="success" id="btnUp">👍 Thumbs up <span class="muted">(→)</span></button>
+        </div>
+        <div class="row" style="margin:0;justify-content:center;">
+          <button type="button" id="btnPrev">Previous</button>
+          <button type="button" id="btnNext">Next</button>
+          <button type="button" id="btnExport">Download votes (JSON)</button>
+        </div>
+      </div>
+      <footer>
+        Only rows with <strong>rank = 1</strong> appear in the queue (per activity). Thumbs up/down advance automatically; Skip does not.
+        Export from Excel as <strong>.xlsx</strong> or <strong>.csv</strong>. Runs only in your browser.
+      </footer>
+    </section>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const fileInput = $("file");
+    const sheetSelect = $("sheetName");
+    const btnLoad = $("btnLoad");
+    const mapRow = $("mapRow");
+    const colActivity = $("colActivity");
+    const colImage = $("colImage");
+    const colScore = $("colScore");
+    const colRank = $("colRank");
+    const btnStart = $("btnStart");
+    const errBox = $("error");
+    const setup = $("setup");
+    const viewer = $("viewer");
+    const hero = $("hero");
+    const actLabel = $("actLabel");
+    const idxLabel = $("idxLabel");
+    const votePill = $("votePill");
+    const btnDown = $("btnDown");
+    const btnUp = $("btnUp");
+    const btnSkip = $("btnSkip");
+    const btnPrev = $("btnPrev");
+    const btnNext = $("btnNext");
+    const btnExport = $("btnExport");
+
+    let workbook = null;
+    let rawRows = [];
+    let headers = [];
+    let fileName = "";
+    let queue = [];
+    let cursor = 0;
+    /** @type {Record<string, 'up'|'down'|null>} */
+    let votes = {};
+    const SKIP = "__skip__";
+
+    function setError(msg) {
+      errBox.textContent = msg || "";
+    }
+
+    function guessColumn(headers, patterns) {
+      const lower = headers.map((h) => String(h || "").toLowerCase());
+      for (const p of patterns) {
+        const i = lower.findIndex((h) => h.includes(p));
+        if (i >= 0) return headers[i];
+      }
+      return "";
+    }
+
+    function parseCSV(text) {
+      const rows = [];
+      let i = 0;
+      const field = () => {
+        let s = "";
+        if (text[i] === '"') {
+          i++;
+          while (i < text.length) {
+            if (text[i] === '"' && text[i + 1] === '"') {
+              s += '"';
+              i += 2;
+            } else if (text[i] === '"') {
+              i++;
+              break;
+            } else {
+              s += text[i++];
+            }
+          }
+        } else {
+          while (i < text.length && text[i] !== "," && text[i] !== "\n" && text[i] !== "\r") {
+            s += text[i++];
+          }
+        }
+        return s;
+      };
+      const line = () => {
+        const r = [];
+        while (i < text.length) {
+          r.push(field());
+          if (text[i] === ",") {
+            i++;
+            continue;
+          }
+          if (text[i] === "\r") i++;
+          if (text[i] === "\n") {
+            i++;
+            break;
+          }
+          if (i >= text.length) break;
+        }
+        return r;
+      };
+      const headerLine = line();
+      if (!headerLine.length) return { headers: [], rows: [] };
+      const hdr = headerLine.map((h) => h.trim());
+      while (i < text.length) {
+        const r = line();
+        if (r.every((c) => String(c).trim() === "")) continue;
+        const obj = {};
+        hdr.forEach((h, j) => (obj[h] = r[j] !== undefined ? r[j] : ""));
+        rows.push(obj);
+      }
+      return { headers: hdr, rows };
+    }
+
+    function fillSelect(sel, cols, includeEmpty) {
+      sel.innerHTML = "";
+      if (includeEmpty) {
+        const o = document.createElement("option");
+        o.value = SKIP;
+        o.textContent = "— none —";
+        sel.appendChild(o);
+      }
+      for (const c of cols) {
+        const o = document.createElement("option");
+        o.value = c;
+        o.textContent = c;
+        sel.appendChild(o);
+      }
+    }
+
+    btnLoad.addEventListener("click", () => {
+      setError("");
+      const f = fileInput.files[0];
+      if (!f) {
+        setError("Choose a .csv or .xlsx file first.");
+        return;
+      }
+      fileName = f.name;
+      const ext = f.name.split(".").pop().toLowerCase();
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          if (ext === "csv") {
+            const text = String(e.target.result);
+            const { headers: h, rows } = parseCSV(text);
+            headers = h;
+            rawRows = rows;
+            sheetSelect.innerHTML = "";
+            sheetSelect.disabled = true;
+          } else {
+            const data = new Uint8Array(e.target.result);
+            workbook = XLSX.read(data, { type: "array" });
+            sheetSelect.innerHTML = "";
+            workbook.SheetNames.forEach((name) => {
+              const o = document.createElement("option");
+              o.value = name;
+              o.textContent = name;
+              sheetSelect.appendChild(o);
+            });
+            sheetSelect.disabled = workbook.SheetNames.length <= 1;
+            if (workbook.SheetNames.length) {
+              sheetSelect.value = workbook.SheetNames[0];
+              loadSheet(workbook.SheetNames[0]);
+            }
+          }
+          afterParse();
+        } catch (ex) {
+          setError(String(ex.message || ex));
+        }
+      };
+      if (ext === "csv") reader.readAsText(f);
+      else reader.readAsArrayBuffer(f);
+    });
+
+    sheetSelect.addEventListener("change", () => {
+      if (!workbook) return;
+      loadSheet(sheetSelect.value);
+      afterParse();
+    });
+
+    function loadSheet(name) {
+      const ws = workbook.Sheets[name];
+      const json = XLSX.utils.sheet_to_json(ws, { defval: "" });
+      rawRows = json;
+      headers = json.length ? Object.keys(json[0]) : [];
+    }
+
+    function afterParse() {
+      if (!headers.length) {
+        setError("No columns found. Check the file or pick another sheet.");
+        return;
+      }
+      fillSelect(colActivity, headers, false);
+      fillSelect(colImage, headers, false);
+      fillSelect(colScore, headers, true);
+      fillSelect(colRank, headers, false);
+
+      const gAct = guessColumn(headers, [
+        "activity_id",
+        "activity",
+        "act_id",
+        "activityid",
+        "master_code",
+        "id",
+      ]);
+      const gImg = guessColumn(headers, [
+        "pix_url",
+        "image",
+        "url",
+        "photo",
+        "picture",
+        "thumb",
+        "link",
+      ]);
+      const gScore = guessColumn(headers, ["quality_score", "score", "quality", "rank_score"]);
+      const gRank = guessColumn(headers, ["rank", "image_number"]);
+
+      if (gAct) colActivity.value = gAct;
+      if (gImg) colImage.value = gImg;
+      if (gScore) colScore.value = gScore;
+      if (gRank) colRank.value = gRank;
+
+      mapRow.classList.remove("hidden");
+    }
+
+    function numOrNull(v) {
+      if (v === "" || v === null || v === undefined) return null;
+      const n = Number(String(v).replace(/,/g, "").trim());
+      return Number.isFinite(n) ? n : null;
+    }
+
+    function isUrl(s) {
+      const t = String(s || "").trim();
+      return /^https?:\/\//i.test(t);
+    }
+
+    btnStart.addEventListener("click", () => {
+      setError("");
+      const kAct = colActivity.value;
+      const kImg = colImage.value;
+      const kScore = colScore.value === SKIP ? null : colScore.value;
+      const kRank = colRank.value;
+      if (!kAct || !kImg) {
+        setError("Pick Activity ID and Image URL columns.");
+        return;
+      }
+      if (!kRank) {
+        setError("Pick the Rank column. Only rows with rank = 1 are included.");
+        return;
+      }
+
+      /** @type {Map<string, { __act: string, __url: string, __score: number|null, __rank: number|null, raw: object }>} */
+      const byAct = new Map();
+      for (const row of rawRows) {
+        const act = String(row[kAct] ?? "").trim();
+        const url = String(row[kImg] ?? "").trim();
+        if (!act || !isUrl(url)) continue;
+        const score = kScore ? numOrNull(row[kScore]) : null;
+        const rank = numOrNull(row[kRank]);
+        if (rank !== 1) continue;
+        const entry = { ...row, __act: act, __url: url, __score: score, __rank: rank };
+        if (!byAct.has(act)) {
+          byAct.set(act, entry);
+        } else {
+          const prev = byAct.get(act);
+          const ps = prev.__score;
+          const cs = score;
+          if (cs != null && (ps == null || cs > ps)) byAct.set(act, entry);
+        }
+      }
+
+      const winners = [...byAct.values()].map((w) => ({
+        activityId: w.__act,
+        imageUrl: w.__url,
+        qualityScore: w.__score,
+        rank: w.__rank,
+        raw: w,
+      }));
+
+      if (!winners.length) {
+        setError(
+          "No rows with rank = 1, a valid Activity ID, and http(s) image URL. Check column mapping and that rank values are numeric.",
+        );
+        return;
+      }
+
+      queue = winners;
+      const storageKey = `activity-img-votes:${fileName}:rank1:${queue.length}`;
+      try {
+        const saved = localStorage.getItem(storageKey);
+        if (saved) votes = JSON.parse(saved);
+      } catch {
+        votes = {};
+      }
+      window.__voteStorageKey = storageKey;
+
+      cursor = 0;
+      setup.classList.add("hidden");
+      viewer.classList.remove("hidden");
+      render();
+    });
+
+    function persistVotes() {
+      const key = window.__voteStorageKey;
+      if (!key) return;
+      try {
+        localStorage.setItem(key, JSON.stringify(votes));
+      } catch {
+        /* ignore */
+      }
+    }
+
+    function currentKey() {
+      if (!queue[cursor]) return null;
+      return queue[cursor].activityId;
+    }
+
+    function render() {
+      const item = queue[cursor];
+      if (!item) return;
+      actLabel.textContent = `Activity: ${item.activityId}`;
+      idxLabel.textContent = `${cursor + 1} / ${queue.length}`;
+      hero.src = item.imageUrl;
+      hero.alt = `Image for ${item.activityId}`;
+      const v = votes[item.activityId];
+      votePill.classList.remove("up", "down");
+      if (v === "up") {
+        votePill.textContent = "thumbs up";
+        votePill.classList.add("up");
+      } else if (v === "down") {
+        votePill.textContent = "thumbs down";
+        votePill.classList.add("down");
+      } else {
+        votePill.textContent = "not voted";
+      }
+    }
+
+    function setVote(val) {
+      const k = currentKey();
+      if (!k) return;
+      votes[k] = val;
+      persistVotes();
+      if (val === "up" || val === "down") {
+        if (cursor < queue.length - 1) cursor += 1;
+      }
+      render();
+    }
+
+    btnDown.addEventListener("click", () => setVote("down"));
+    btnUp.addEventListener("click", () => setVote("up"));
+    btnSkip.addEventListener("click", () => setVote(null));
+    btnPrev.addEventListener("click", () => {
+      cursor = Math.max(0, cursor - 1);
+      render();
+    });
+    btnNext.addEventListener("click", () => {
+      cursor = Math.min(queue.length - 1, cursor + 1);
+      render();
+    });
+
+    btnExport.addEventListener("click", () => {
+      const out = queue.map((q) => ({
+        activityId: q.activityId,
+        vote: Object.prototype.hasOwnProperty.call(votes, q.activityId) ? votes[q.activityId] : null,
+        imageUrl: q.imageUrl,
+        qualityScore: q.qualityScore,
+        rank: q.rank,
+      }));
+      const blob = new Blob([JSON.stringify(out, null, 2)], { type: "application/json" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `image-votes-${fileName.replace(/[^\w.-]+/g, "_")}.json`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    });
+
+    window.addEventListener("keydown", (ev) => {
+      if (!viewer.classList.contains("hidden")) {
+        if (["INPUT", "SELECT", "TEXTAREA"].includes(ev.target.tagName)) return;
+        if (ev.key === "ArrowLeft" || ev.key === "a" || ev.key === "A") {
+          ev.preventDefault();
+          setVote("down");
+        } else if (ev.key === "ArrowRight" || ev.key === "d" || ev.key === "D") {
+          ev.preventDefault();
+          setVote("up");
+        } else if (ev.key === "ArrowDown" || ev.key === "s" || ev.key === "S") {
+          ev.preventDefault();
+          setVote(null);
+        }
+      }
+    });
+  </script>
+</body>
+</html>

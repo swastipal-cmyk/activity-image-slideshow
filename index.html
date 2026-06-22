@@ -156,13 +156,38 @@
       font-size: 0.78rem;
       color: var(--muted);
     }
+    .default-data-note {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      align-items: center;
+      margin-bottom: 1rem;
+      padding: 0.65rem 0.85rem;
+      border-radius: 8px;
+      border: 1px solid var(--good);
+      background: rgba(63, 185, 80, 0.08);
+      font-size: 0.85rem;
+      color: var(--text);
+    }
+    .default-data-alt-btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--accent);
+      padding: 0.35rem 0.65rem;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.8rem;
+    }
+    .default-data-alt-btn:hover {
+      border-color: var(--accent);
+    }
   </style>
 </head>
 <body>
   <header>
     <h1>Activity image review</h1>
     <p>
-      Load your sheet, map columns. Only rows with <strong>rank = 1</strong> are shown. Thumbs up or down saves your vote and
+      Load your sheet, map columns. Only rows with <strong>rank = 1</strong> are shown. Activities are in a <strong>random order</strong> each time you build (for a spread of reviews). Thumbs up or down saves your vote and
       moves to the next slide automatically.
     </p>
   </header>
@@ -191,7 +216,11 @@
         </div>
         <span id="centralStatus"></span>
       </fieldset>
-      <div class="row">
+      <div id="defaultDataBanner" class="default-data-note hidden">
+        <span id="defaultDataBannerText"></span>
+        <button type="button" id="btnUseOwnFile" class="default-data-alt-btn">Upload a different file…</button>
+      </div>
+      <div class="row" id="fileRow">
         <label>Spreadsheet
           <input id="file" type="file" accept=".csv,.xlsx,.xls" />
         </label>
@@ -244,8 +273,8 @@
         </div>
       </div>
       <footer>
-        Only rows with <strong>rank = 1</strong> appear in the queue (per activity). Thumbs up/down advance automatically; Skip does not.
-        Optional <strong>central log</strong> POSTs votes to your Web app URL. Export from Excel as <strong>.xlsx</strong> or <strong>.csv</strong>. Runs only in your browser.
+        Only rows with <strong>rank = 1</strong> appear in the queue (per activity), in <strong>random order</strong> each build. Thumbs up/down advance automatically; Skip does not.
+        Optional <strong>central log</strong> POSTs votes to your Web app URL. By default the bundled <strong>All Activities</strong> CSV loads from this site (see README). You can upload another <strong>.csv</strong> or <strong>.xlsx</strong> instead. Runs only in your browser.
       </footer>
     </section>
   </main>
@@ -275,8 +304,12 @@
     const btnPrev = $("btnPrev");
     const btnNext = $("btnNext");
     const btnExport = $("btnExport");
+    const fileRow = $("fileRow");
+    const defaultDataBanner = $("defaultDataBanner");
+    const defaultDataBannerText = $("defaultDataBannerText");
+    const btnUseOwnFile = $("btnUseOwnFile");
 
-    let workbook = null;
+    const DEFAULT_DATA_URL = "data/all-activities-web.csv";
     let rawRows = [];
     let headers = [];
     let fileName = "";
@@ -354,6 +387,27 @@
       return { headers: hdr, rows };
     }
 
+    function shuffleInPlace(arr) {
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        const t = arr[i];
+        arr[i] = arr[j];
+        arr[j] = t;
+      }
+    }
+
+    function applyInMemoryCsv(text, logicalName) {
+      const { headers: h, rows } = parseCSV(text);
+      headers = h;
+      rawRows = rows;
+      fileName = logicalName;
+      workbook = null;
+      sheetSelect.innerHTML = "";
+      sheetSelect.disabled = true;
+      setError("");
+      afterParse();
+    }
+
     function fillSelect(sel, cols, includeEmpty) {
       sel.innerHTML = "";
       if (includeEmpty) {
@@ -369,6 +423,11 @@
         sel.appendChild(o);
       }
     }
+
+    btnUseOwnFile.addEventListener("click", () => {
+      defaultDataBanner.classList.add("hidden");
+      fileRow.classList.remove("hidden");
+    });
 
     btnLoad.addEventListener("click", () => {
       setError("");
@@ -527,6 +586,7 @@
       }
 
       queue = winners;
+      shuffleInPlace(queue);
       const storageKey = `activity-img-votes:${fileName}:rank1:${queue.length}`;
       try {
         const saved = localStorage.getItem(storageKey);
@@ -647,6 +707,22 @@
     });
 
     if (typeof VoteCentral !== "undefined") VoteCentral.wireForm();
+
+    (async function tryDefaultBundledDataset() {
+      try {
+        const res = await fetch(DEFAULT_DATA_URL, { cache: "no-store" });
+        if (!res.ok) return;
+        const text = await res.text();
+        applyInMemoryCsv(text, "all-activities-web.csv (All Activities export)");
+        defaultDataBannerText.textContent =
+          "Bundled dataset loaded (~8.5k image rows, All Activities). Column mapping is pre-filled — activities are shuffled each build — the slideshow opens automatically.";
+        defaultDataBanner.classList.remove("hidden");
+        fileRow.classList.add("hidden");
+        btnStart.click();
+      } catch {
+        /* file:// or missing data file */
+      }
+    })();
   </script>
 </body>
 </html>

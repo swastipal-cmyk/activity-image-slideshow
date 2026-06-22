@@ -199,13 +199,38 @@
       font-size: 0.78rem;
       color: var(--muted);
     }
+    .default-data-note {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      align-items: center;
+      margin-bottom: 1rem;
+      padding: 0.65rem 0.85rem;
+      border-radius: 8px;
+      border: 1px solid var(--rank1);
+      background: rgba(63, 185, 80, 0.08);
+      font-size: 0.85rem;
+      color: var(--text);
+    }
+    .default-data-alt-btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--accent);
+      padding: 0.35rem 0.65rem;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.8rem;
+    }
+    .default-data-alt-btn:hover {
+      border-color: var(--accent);
+    }
   </style>
 </head>
 <body>
   <header>
     <h1>Activity images — ranks 1–8</h1>
     <p>
-      For each activity, all eight ranks appear together. <strong>Rank 1</strong> is highlighted in green. Click your
+      For each activity, all eight ranks appear together. <strong>Rank 1</strong> is highlighted in green. Activities are in a <strong>random order</strong> each time you build. Click your
       <strong>favourite</strong> (or press keys <strong>1–8</strong>) to compare with the sheet’s top rank — then the view
       <strong>moves to the next activity</strong> automatically (last activity stays put).
     </p>
@@ -235,7 +260,11 @@
         </div>
         <span id="centralStatus"></span>
       </fieldset>
-      <div class="row">
+      <div id="defaultDataBanner" class="default-data-note hidden">
+        <span id="defaultDataBannerText"></span>
+        <button type="button" id="btnUseOwnFile" class="default-data-alt-btn">Upload a different file…</button>
+      </div>
+      <div class="row" id="fileRow">
         <label>Spreadsheet
           <input id="file" type="file" accept=".csv,.xlsx,.xls" />
         </label>
@@ -267,7 +296,7 @@
         <div class="meta">
           <div>
             <strong id="actLabel">—</strong>
-            <div class="hint" id="idxLabel">Green = Rank 1 · Purple = your pick · Choosing a favourite advances to the next activity</div>
+            <div class="hint" id="idxLabel">Green = Rank 1 · Purple = your pick · Random activity order · Picking advances to next</div>
           </div>
           <div id="verdict" class="verdict empty">Pick an image (click or press 1–8).</div>
         </div>
@@ -280,8 +309,8 @@
         </div>
       </div>
       <footer>
-        Only ranks <strong>1–8</strong> are shown. Picking a favourite (click or 1–8) <strong>advances</strong> to the next activity; click the same image again to clear without advancing. <strong>Clear favourite</strong> does not advance.
-        Optional <strong>central log</strong> POSTs picks to your Web app URL. Data stays in your browser unless you enable logging.
+        Only ranks <strong>1–8</strong> are shown. Activities appear in <strong>random order</strong> each build. Picking a favourite (click or 1–8) <strong>advances</strong> to the next activity; click the same image again to clear without advancing. <strong>Clear favourite</strong> does not advance.
+        Optional <strong>central log</strong> POSTs picks to your Web app URL. By default a bundled <strong>All Activities</strong> CSV loads from this site (see README). Data stays in your browser unless you enable logging.
       </footer>
     </section>
   </main>
@@ -310,6 +339,12 @@
     const btnNext = $("btnNext");
     const btnClearPick = $("btnClearPick");
     const btnExport = $("btnExport");
+    const fileRow = $("fileRow");
+    const defaultDataBanner = $("defaultDataBanner");
+    const defaultDataBannerText = $("defaultDataBannerText");
+    const btnUseOwnFile = $("btnUseOwnFile");
+
+    const DEFAULT_DATA_URL = "data/all-activities-web.csv";
 
     let workbook = null;
     let rawRows = [];
@@ -389,6 +424,27 @@
       return { headers: hdr, rows };
     }
 
+    function shuffleInPlace(arr) {
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        const t = arr[i];
+        arr[i] = arr[j];
+        arr[j] = t;
+      }
+    }
+
+    function applyInMemoryCsv(text, logicalName) {
+      const { headers: h, rows } = parseCSV(text);
+      headers = h;
+      rawRows = rows;
+      fileName = logicalName;
+      workbook = null;
+      sheetSelect.innerHTML = "";
+      sheetSelect.disabled = true;
+      setError("");
+      afterParse();
+    }
+
     function fillSelect(sel, cols, includeEmpty) {
       sel.innerHTML = "";
       if (includeEmpty) {
@@ -404,6 +460,11 @@
         sel.appendChild(o);
       }
     }
+
+    btnUseOwnFile.addEventListener("click", () => {
+      defaultDataBanner.classList.add("hidden");
+      fileRow.classList.remove("hidden");
+    });
 
     btnLoad.addEventListener("click", () => {
       setError("");
@@ -544,7 +605,7 @@
         return;
       }
 
-      list.sort((a, b) => String(a.activityId).localeCompare(String(b.activityId)));
+      shuffleInPlace(list);
       activities = list;
 
       const storageKey = `activity-img-grid8:${fileName}:${activities.length}`;
@@ -611,7 +672,7 @@
         (cursor + 1) +
         " of " +
         activities.length +
-        " · Green = Rank 1 · Purple = your pick · Picking advances to next";
+        " · Green = Rank 1 · Purple = your pick · Random order · Picking advances to next";
 
       const fav = picks[item.activityId] ?? null;
       gridEl.innerHTML = "";
@@ -762,6 +823,22 @@
     });
 
     if (typeof VoteCentral !== "undefined") VoteCentral.wireForm();
+
+    (async function tryDefaultBundledDataset() {
+      try {
+        const res = await fetch(DEFAULT_DATA_URL, { cache: "no-store" });
+        if (!res.ok) return;
+        const text = await res.text();
+        applyInMemoryCsv(text, "all-activities-web.csv (All Activities export)");
+        defaultDataBannerText.textContent =
+          "Bundled dataset loaded (~8.5k image rows, All Activities). Column mapping is pre-filled — activities are shuffled each build — the grid opens automatically.";
+        defaultDataBanner.classList.remove("hidden");
+        fileRow.classList.add("hidden");
+        btnStart.click();
+      } catch {
+        /* file:// or missing data file */
+      }
+    })();
   </script>
 </body>
 </html>

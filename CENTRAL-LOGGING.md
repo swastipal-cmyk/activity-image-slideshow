@@ -10,7 +10,21 @@ Reviewers use the **optional** “Central vote log” block at the **top of the 
 4. Enter **Name / initials** (or leave blank — an anonymous id is used).
 5. Turn on **Send each vote…** / **Send each pick…**, click **Save logging settings**, then use **Test send** once. In Apps Script open **Executions** — you should see a run. If it’s red, open it for the error message.
 
-Votes are still saved locally as before; logging is **in addition** (fire-and-forget). Because of browser security (`no-cors`), the page **cannot** read the HTTP response — if something is wrong, rows simply won’t appear in the sheet.
+Votes are still saved locally as before; logging is **in addition** (fire-and-forget). The tools use **`navigator.sendBeacon`** when possible, then **`fetch`** with `no-cors` as a fallback — the page **cannot** read the HTTP response, so if something is wrong, rows simply won’t appear in the sheet.
+
+### If Apps Script → Executions shows nothing
+
+1. **Confirm the Web app URL with GET** — paste the `/exec` URL in a **new browser tab**. You should see plain text from `doGet` (“Web app is reachable…”). If you get 404, sign-in, or wrong page, the deployment URL or **Who has access** is wrong — **fix that before** looking at POSTs.
+
+2. **Open the correct script project** — Executions are logged on the **Apps Script project that owns the deployment** (usually **Extensions → Apps Script** on the bound Sheet). They do **not** appear in Google Cloud Console “Executions” for a different project.
+
+3. **In the Apps Script editor**, use the **left sidebar** (clock / list icon, labeled **Executions** or **Runs** depending on UI). Filter “All executions”, not only “My runs” if such a filter exists.
+
+4. **After changing the checkbox or URL**, click **Save logging settings** again — settings are in `localStorage` per browser profile.
+
+5. **Browser check** — DevTools → **Network**, filter `script.google`, click **Test send**. You should see a **POST** to your `/exec` URL (not blocked / cancelled). If there is no POST, an extension, strict mode, or the page not loading `central-votes.js` is likely.
+
+6. **Older bug (fixed in repo)** — `fetch` + `no-cors` + a manual `Content-Type` with `charset` could cause the body not to parse as form data on the server. Current `central-votes.js` uses **sendBeacon** and **URLSearchParams as `fetch` body** without a custom header. Redeploy the **static site** after pulling the fix, or paste the updated script into your fork.
 
 ## What you do (Google Sheet + Apps Script)
 

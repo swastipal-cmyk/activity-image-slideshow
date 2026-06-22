@@ -59,12 +59,18 @@
   /**
    * POST vote to your endpoint. Uses application/x-www-form-urlencoded + `payload`
    * (JSON string) so Google Apps Script reliably fills `e.parameter.payload`.
-   * Still uses no-cors so the response is opaque, but the request body reaches GAS.
+   *
+   * Prefer `sendBeacon` for cross-origin POSTs: `fetch` + `no-cors` with a manual
+   * Content-Type can be rewritten to `text/plain`, which breaks form parsing on the server.
+   * When using `fetch`, pass a URLSearchParams object as `body` and omit Content-Type so
+   * the browser sets a CORS-safelisted `application/x-www-form-urlencoded` value.
+   *
    * @param {Record<string, unknown>} record
    */
   function submit(record) {
     if (!isOn()) return;
     const url = getEndpoint();
+    if (!url) return;
     const body = JSON.stringify({
       ...record,
       reviewerId: reviewerId(),
@@ -72,12 +78,20 @@
     });
     const params = new URLSearchParams();
     params.set("payload", body);
+
+    try {
+      if (typeof navigator.sendBeacon === "function" && navigator.sendBeacon(url, params)) {
+        return;
+      }
+    } catch {
+      /* fall through to fetch */
+    }
+
     fetch(url, {
       method: "POST",
       mode: "no-cors",
       cache: "no-cache",
-      headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
-      body: params.toString(),
+      body: params,
     }).catch(function () {});
   }
 

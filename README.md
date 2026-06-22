@@ -1,11 +1,17 @@
 # Activity image review tools
 
-Two static pages (same load / column mapping pattern):
+Two static pages (same load / column mapping pattern), plus optional central logging:
 
 | File | Purpose |
 |------|--------|
 | **`index.html`** | One **rank = 1** image per activity — thumbs up/down, auto-advance. |
 | **`image-grid-compare.html`** | All **ranks 1–8** side by side — **green** = sheet Rank 1, click or **1–8** keys for your **favourite**, verdict vs Rank 1, JSON export. |
+| **`central-votes.js`** | Shared helper: optional **POST to your Web app** so votes land in one place (e.g. Google Sheet). |
+| **`CENTRAL-LOGGING.md`** | Step-by-step: **Google Apps Script + Sheet** receiver (or any HTTPS POST endpoint). |
+
+### Central vote log (many reviewers)
+
+Both HTML tools include **Central vote log (optional)** at the top: reviewers paste your **Apps Script Web app URL**, enter **name / initials** (or stay anonymous), enable **Send each vote…**, and click **Save logging settings**. Votes are still stored locally; when logging is on, each action is also **POSTed** to your URL. Full setup: **`CENTRAL-LOGGING.md`**.
 
 ## Why not open the SharePoint link directly?
 

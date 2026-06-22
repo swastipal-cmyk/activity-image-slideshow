@@ -114,6 +114,48 @@
     .err { color: var(--bad); font-size: 0.85rem; margin-top: 0.5rem; }
     footer { color: var(--muted); font-size: 0.8rem; margin-top: 1.5rem; }
     a { color: var(--accent); }
+    fieldset.central-box {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.75rem 1rem;
+      margin-bottom: 1rem;
+    }
+    fieldset.central-box legend {
+      padding: 0 0.35rem;
+      color: var(--muted);
+      font-size: 0.8rem;
+    }
+    fieldset.central-box .central-row {
+      margin-top: 0.5rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      align-items: flex-end;
+    }
+    fieldset.central-box input[type="url"],
+    fieldset.central-box input[type="text"] {
+      min-width: 200px;
+      width: 100%;
+      max-width: 640px;
+      padding: 0.45rem 0.65rem;
+      background: var(--bg);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 0.9rem;
+    }
+    fieldset.central-box label.chk {
+      flex-direction: row;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    fieldset.central-box #centralStatus {
+      display: block;
+      width: 100%;
+      margin-top: 0.5rem;
+      font-size: 0.78rem;
+      color: var(--muted);
+    }
   </style>
 </head>
 <body>
@@ -126,6 +168,29 @@
   </header>
   <main>
     <section id="setup">
+      <fieldset class="central-box">
+        <legend>Central vote log (optional)</legend>
+        <p style="margin: 0 0 0.5rem; font-size: 0.8rem; color: var(--muted); max-width: 52rem">
+          To aggregate votes from many reviewers, deploy a small receiver (see
+          <a href="CENTRAL-LOGGING.md" target="_blank" rel="noopener">CENTRAL-LOGGING.md</a> in the repo). Paste the Web app URL below.
+        </p>
+        <label class="chk">
+          <input type="checkbox" id="centralEnabled" />
+          Send each vote to the URL below
+        </label>
+        <div class="central-row">
+          <label>Web app URL
+            <input id="centralEndpoint" type="url" autocomplete="off" placeholder="https://script.google.com/macros/s/.../exec" />
+          </label>
+        </div>
+        <div class="central-row">
+          <label>Your name / initials
+            <input id="centralReviewer" type="text" maxlength="80" autocomplete="name" placeholder="e.g. SP" />
+          </label>
+          <button type="button" id="btnSaveCentral">Save logging settings</button>
+        </div>
+        <span id="centralStatus"></span>
+      </fieldset>
       <div class="row">
         <label>Spreadsheet
           <input id="file" type="file" accept=".csv,.xlsx,.xls" />
@@ -180,11 +245,12 @@
       </div>
       <footer>
         Only rows with <strong>rank = 1</strong> appear in the queue (per activity). Thumbs up/down advance automatically; Skip does not.
-        Export from Excel as <strong>.xlsx</strong> or <strong>.csv</strong>. Runs only in your browser.
+        Optional <strong>central log</strong> POSTs votes to your Web app URL. Export from Excel as <strong>.xlsx</strong> or <strong>.csv</strong>. Runs only in your browser.
       </footer>
     </section>
   </main>
 
+  <script src="central-votes.js"></script>
   <script>
     const $ = (id) => document.getElementById(id);
     const fileInput = $("file");
@@ -514,8 +580,22 @@
     function setVote(val) {
       const k = currentKey();
       if (!k) return;
+      const item = queue[cursor];
       votes[k] = val;
       persistVotes();
+      if (typeof VoteCentral !== "undefined" && VoteCentral.isOn()) {
+        VoteCentral.submit({
+          tool: "slideshow",
+          sourceFile: fileName,
+          activityId: k,
+          vote: val,
+          imageUrl: item.imageUrl,
+          qualityScore: item.qualityScore,
+          sheetRank: item.rank,
+          slideIndex: cursor + 1,
+          slideTotal: queue.length,
+        });
+      }
       if (val === "up" || val === "down") {
         if (cursor < queue.length - 1) cursor += 1;
       }
@@ -559,12 +639,14 @@
         } else if (ev.key === "ArrowRight" || ev.key === "d" || ev.key === "D") {
           ev.preventDefault();
           setVote("up");
-        } else if (ev.key === "ArrowDown" || ev.key === "s" || ev.key === "S") {
+        } else         if (ev.key === "ArrowDown" || ev.key === "s" || ev.key === "S") {
           ev.preventDefault();
           setVote(null);
         }
       }
     });
+
+    if (typeof VoteCentral !== "undefined") VoteCentral.wireForm();
   </script>
 </body>
 </html>

@@ -1,19 +1,17 @@
 /**
- * Optional central logging for static GitHub Pages builds.
- * POSTs votes to a Google Form (no-cors, anonymous — no Apps Script auth required).
+ * Central logging for static GitHub Pages builds.
+ * Always-on: POSTs every vote/pick to a Google Form anonymously (no-cors).
  *
- * Form submit URL: https://docs.google.com/forms/d/e/1FAIpQLScS6dPM03tl8tBi353khzTqYb9LBc_pwhLqA1Edz2AUnTURkw/formResponse
- * Paste that URL into the "Form URL" field in the tool.
- * If you recreate the form, update FORM_ENTRY below to match the new entry ID.
+ * To update the form: change FORM_URL and FORM_ENTRY below, then commit + push.
  */
 (function (global) {
-  /** Google Form entry field ID for the single "payload" question. */
+  /** Google Form submit URL and entry field ID for the single "payload" question. */
+  const FORM_URL =
+    "https://docs.google.com/forms/d/e/1FAIpQLScS6dPM03tl8tBi353khzTqYb9LBc_pwhLqA1Edz2AUnTURkw/formResponse";
   const FORM_ENTRY = "entry.1845975560";
 
   const K = {
-    endpoint: "vote-central-endpoint-v1",
     reviewer: "vote-central-reviewer-v1",
-    enable: "vote-central-enable-v1",
     anon: "vote-central-anon-v1",
   };
 
@@ -45,29 +43,14 @@
     return r || anonId();
   }
 
-  function getEndpoint() {
-    try {
-      const v = (localStorage.getItem(K.endpoint) || "").trim();
-      return v.startsWith("https://") ? v : "";
-    } catch {
-      return "";
-    }
-  }
-
+  /** Always on — logging is not optional. */
   function isOn() {
-    let en = false;
-    try {
-      en = localStorage.getItem(K.enable) === "1";
-    } catch {
-      /* ignore */
-    }
-    return en && !!getEndpoint();
+    return true;
   }
 
   /**
-   * Build URLSearchParams for a Google Form POST.
-   * The single form field (FORM_ENTRY) receives the full JSON payload as text.
-   * Passing URLSearchParams as fetch body (no custom Content-Type) produces a
+   * Build URLSearchParams for the Google Form POST.
+   * Passing URLSearchParams as fetch body (no custom Content-Type header) produces a
    * CORS-safelisted simple request — Google Forms accept this without authentication.
    */
   function makeParams(record) {
@@ -80,22 +63,17 @@
         clientTs: new Date().toISOString(),
       }),
     );
-    // Hidden fields Google Forms expects for the submission to be recorded.
     params.set("fvv", "1");
     params.set("pageHistory", "0");
     return params;
   }
 
   /**
-   * Fire-and-forget POST to Google Form for real votes.
-   * no-cors: response is opaque but the submission reaches the form.
+   * Fire-and-forget POST to Google Form.
    * @param {Record<string, unknown>} record
    */
   function submit(record) {
-    if (!isOn()) return;
-    const url = getEndpoint();
-    if (!url) return;
-    fetch(url, {
+    fetch(FORM_URL, {
       method: "POST",
       mode: "no-cors",
       cache: "no-cache",
@@ -104,65 +82,36 @@
   }
 
   function wireForm() {
-    const ep = document.getElementById("centralEndpoint");
     const rv = document.getElementById("centralReviewer");
-    const en = document.getElementById("centralEnabled");
     const btn = document.getElementById("btnSaveCentral");
     const st = document.getElementById("centralStatus");
-    if (!ep || !btn) return;
-    try {
-      ep.value = localStorage.getItem(K.endpoint) || "";
-    } catch {
-      ep.value = "";
-    }
+    if (!rv || !btn) return;
     try {
       rv.value = localStorage.getItem(K.reviewer) || "";
     } catch {
       rv.value = "";
     }
-    try {
-      en.checked = localStorage.getItem(K.enable) === "1";
-    } catch {
-      en.checked = false;
-    }
     btn.addEventListener("click", function () {
       try {
-        localStorage.setItem(K.endpoint, ep.value.trim());
         localStorage.setItem(K.reviewer, (rv.value || "").trim());
-        localStorage.setItem(K.enable, en.checked ? "1" : "0");
       } catch {
         /* ignore */
       }
       if (st) {
-        const raw = ep.value.trim();
-        if (raw && !raw.startsWith("https://")) {
-          st.textContent =
-            "URL must start with https:// — please re-enter the full formResponse URL.";
-        } else {
-          st.textContent = isOn()
-            ? "Saved. Each vote will be posted to your Google Form."
-            : "Saved. Turn on the checkbox and paste the form URL to enable logging.";
-        }
+        st.textContent = rv.value.trim()
+          ? "Name saved \u2014 your votes will be logged as \u201c" + rv.value.trim() + "\u201d."
+          : "Saved (no name \u2014 an anonymous ID will be used).";
       }
     });
 
     const testBtn = document.getElementById("btnTestCentral");
     if (testBtn) {
       testBtn.addEventListener("click", function () {
-        const url = getEndpoint().trim();
-        if (!url) {
-          if (st) st.textContent = "Paste the Google Form formResponse URL first.";
-          return;
-        }
-        if (!isOn()) {
-          if (st) st.textContent = "Turn on \u201cSend each\u2026\u201d and click Save logging settings first.";
-          return;
-        }
-        const testParams = makeParams({ tool: "ping", note: "manual test" });
-        console.log("[VoteCentral] POST to:", url);
+        const testParams = makeParams({ tool: "ping", note: "manual test from activity-image-slideshow" });
+        console.log("[VoteCentral] POST to:", FORM_URL);
         console.log("[VoteCentral] body:", testParams.toString());
-        if (st) st.textContent = "Sending to: " + url;
-        fetch(url, {
+        if (st) st.textContent = "Sending\u2026";
+        fetch(FORM_URL, {
           method: "POST",
           mode: "no-cors",
           cache: "no-cache",
@@ -171,12 +120,11 @@
           .then(function () {
             if (st)
               st.textContent =
-                "Sent! Check your linked Google Sheet for a new row with tool:ping. " +
-                "If nothing appears after 15 s, open DevTools \u2192 Console \u2014 the URL logged there must start with https://docs.google.com.";
+                "Sent! Check the linked Google Sheet for a new row with tool:ping within a few seconds.";
           })
           .catch(function (err) {
             console.error("[VoteCentral] fetch error:", err);
-            if (st) st.textContent = "Fetch error: " + String(err && err.message ? err.message : err);
+            if (st) st.textContent = "Error: " + String(err && err.message ? err.message : err);
           });
       });
     }

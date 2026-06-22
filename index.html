@@ -193,26 +193,15 @@
   </header>
   <main>
     <fieldset class="central-box">
-      <legend>Central vote log (optional)</legend>
+      <legend>Vote log</legend>
       <p style="margin: 0 0 0.5rem; font-size: 0.8rem; color: var(--muted); max-width: 52rem">
-        To aggregate votes from many reviewers, deploy a small receiver (see
-        <a href="CENTRAL-LOGGING.md" target="_blank" rel="noopener">CENTRAL-LOGGING.md</a> in the repo). Paste the Google Form <code>formResponse</code> URL below.
-        This block stays visible while you review.
+        Your votes are logged centrally. Enter your name or initials so we know who reviewed what.
       </p>
-      <label class="chk">
-        <input type="checkbox" id="centralEnabled" />
-        Send each vote to the URL below
-      </label>
-      <div class="central-row">
-        <label>Form URL
-          <input id="centralEndpoint" type="url" autocomplete="off" placeholder="https://docs.google.com/forms/d/e/.../formResponse" />
-        </label>
-      </div>
       <div class="central-row">
         <label>Your name / initials
           <input id="centralReviewer" type="text" maxlength="80" autocomplete="name" placeholder="e.g. SP" />
         </label>
-        <button type="button" id="btnSaveCentral">Save logging settings</button>
+        <button type="button" id="btnSaveCentral">Save name</button>
         <button type="button" id="btnTestCentral" class="default-data-alt-btn">Test send</button>
       </div>
       <span id="centralStatus"></span>

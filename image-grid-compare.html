@@ -236,30 +236,32 @@
     </p>
   </header>
   <main>
-    <section id="setup">
-      <fieldset class="central-box">
-        <legend>Central vote log (optional)</legend>
-        <p style="margin: 0 0 0.5rem; font-size: 0.8rem; color: var(--muted); max-width: 52rem">
-          To aggregate picks from many reviewers, deploy a receiver (see
-          <a href="CENTRAL-LOGGING.md" target="_blank" rel="noopener">CENTRAL-LOGGING.md</a> in the repo). Paste the Web app URL below.
-        </p>
-        <label class="chk">
-          <input type="checkbox" id="centralEnabled" />
-          Send each pick to the URL below
+    <fieldset class="central-box">
+      <legend>Central vote log (optional)</legend>
+      <p style="margin: 0 0 0.5rem; font-size: 0.8rem; color: var(--muted); max-width: 52rem">
+        To aggregate picks from many reviewers, deploy a receiver (see
+        <a href="CENTRAL-LOGGING.md" target="_blank" rel="noopener">CENTRAL-LOGGING.md</a> in the repo). Paste the Web app URL below.
+        This block stays visible while you review.
+      </p>
+      <label class="chk">
+        <input type="checkbox" id="centralEnabled" />
+        Send each pick to the URL below
+      </label>
+      <div class="central-row">
+        <label>Web app URL
+          <input id="centralEndpoint" type="url" autocomplete="off" placeholder="https://script.google.com/macros/s/.../exec" />
         </label>
-        <div class="central-row">
-          <label>Web app URL
-            <input id="centralEndpoint" type="url" autocomplete="off" placeholder="https://script.google.com/macros/s/.../exec" />
-          </label>
-        </div>
-        <div class="central-row">
-          <label>Your name / initials
-            <input id="centralReviewer" type="text" maxlength="80" autocomplete="name" placeholder="e.g. SP" />
-          </label>
-          <button type="button" id="btnSaveCentral">Save logging settings</button>
-        </div>
-        <span id="centralStatus"></span>
-      </fieldset>
+      </div>
+      <div class="central-row">
+        <label>Your name / initials
+          <input id="centralReviewer" type="text" maxlength="80" autocomplete="name" placeholder="e.g. SP" />
+        </label>
+        <button type="button" id="btnSaveCentral">Save logging settings</button>
+        <button type="button" id="btnTestCentral" class="default-data-alt-btn">Test send</button>
+      </div>
+      <span id="centralStatus"></span>
+    </fieldset>
+    <section id="setup">
       <div id="defaultDataBanner" class="default-data-note hidden">
         <span id="defaultDataBannerText"></span>
         <button type="button" id="btnUseOwnFile" class="default-data-alt-btn">Upload a different file…</button>

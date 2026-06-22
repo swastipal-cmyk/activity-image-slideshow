@@ -1,6 +1,6 @@
 /**
  * Optional central logging for static GitHub Pages builds.
- * POSTs JSON as text/plain (no-cors) to a URL you control (e.g. Google Apps Script web app).
+ * POSTs votes as application/x-www-form-urlencoded (`payload` = JSON) for Google Apps Script.
  */
 (function (global) {
   const K = {
@@ -57,8 +57,9 @@
   }
 
   /**
-   * Fire-and-forget POST. Uses no-cors so the browser will not expose the response body
-   * (Google Apps Script and many loggers still receive the request).
+   * POST vote to your endpoint. Uses application/x-www-form-urlencoded + `payload`
+   * (JSON string) so Google Apps Script reliably fills `e.parameter.payload`.
+   * Still uses no-cors so the response is opaque, but the request body reaches GAS.
    * @param {Record<string, unknown>} record
    */
   function submit(record) {
@@ -69,12 +70,14 @@
       reviewerId: reviewerId(),
       clientTs: new Date().toISOString(),
     });
+    const params = new URLSearchParams();
+    params.set("payload", body);
     fetch(url, {
       method: "POST",
       mode: "no-cors",
       cache: "no-cache",
-      headers: { "Content-Type": "text/plain;charset=UTF-8" },
-      body,
+      headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+      body: params.toString(),
     }).catch(function () {});
   }
 
@@ -110,10 +113,29 @@
       }
       if (st) {
         st.textContent = isOn()
-          ? "Saved. Each vote is sent to your endpoint (browser cannot confirm delivery — check the sheet)."
+          ? "Saved. Each vote is sent to your endpoint (browser cannot confirm delivery — check the sheet and Apps Script → Executions)."
           : "Saved. Turn on the checkbox and paste a valid Web app URL to enable logging.";
       }
     });
+
+    const testBtn = document.getElementById("btnTestCentral");
+    if (testBtn) {
+      testBtn.addEventListener("click", function () {
+        if (!getEndpoint().trim()) {
+          if (st) st.textContent = "Paste a Web app URL first.";
+          return;
+        }
+        if (!isOn()) {
+          if (st) st.textContent = "Turn on “Send each…” and click Save logging settings first.";
+          return;
+        }
+        submit({ tool: "ping", note: "manual test from activity-image-slideshow" });
+        if (st) {
+          st.textContent =
+            "Test event sent. Open Apps Script → Executions (clock icon) within 1–2 minutes. If you see no run, the Web app URL or deployment access is wrong. If the run is red, open it and read the error.";
+        }
+      });
+    }
   }
 
   global.VoteCentral = { submit: submit, isOn: isOn, wireForm: wireForm };

@@ -31,7 +31,7 @@ Then commit and push `data/all-activities-web.csv`.
 
 ### Central vote log (many reviewers)
 
-Both HTML tools include **Central vote log (optional)** at the top: reviewers paste your **Apps Script Web app URL**, enter **name / initials** (or stay anonymous), enable **Send each vote…**, and click **Save logging settings**. Votes are still stored locally; when logging is on, each action is also **POSTed** to your URL. Full setup: **`CENTRAL-LOGGING.md`**.
+Both HTML tools include **Central vote log (optional)** at the **top of the page** (above file upload); it **stays visible** while you review so you can paste the Web app URL, **Save**, and **Test send** after the grid or slideshow has opened. Use **Test send** once and confirm a run appears under **Apps Script → Executions**. Votes are still stored locally; when logging is on, each action is also **POSTed** to your URL. Full setup: **`CENTRAL-LOGGING.md`**.
 
 ## Why not open the SharePoint link directly?
 

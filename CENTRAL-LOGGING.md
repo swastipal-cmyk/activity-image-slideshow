@@ -1,6 +1,6 @@
 # Central vote logging
 
-Reviewers use the **optional** “Central vote log” block on each tool. When enabled, every vote is **POSTed** from their browser to a URL **you** provide. The static site has **no backend**; you host a tiny receiver (recommended: **Google Apps Script** + **Google Sheet**).
+Reviewers use the **optional** “Central vote log” block at the **top of the page** (it stays visible after you start reviewing). When enabled, every vote is **POSTed** from their browser to a URL **you** provide. The static site has **no backend**; you host a tiny receiver (recommended: **Google Apps Script** + **Google Sheet**).
 
 ## What reviewers do
 
@@ -8,7 +8,7 @@ Reviewers use the **optional** “Central vote log” block on each tool. When e
 2. Expand **Central vote log (optional)**.
 3. Paste the **Web app URL** you send them (see below).
 4. Enter **Name / initials** (or leave blank — an anonymous id is used).
-5. Turn on **Send each vote…** and click **Save logging settings**.
+5. Turn on **Send each vote…** / **Send each pick…**, click **Save logging settings**, then use **Test send** once. In Apps Script open **Executions** — you should see a run. If it’s red, open it for the error message.
 
 Votes are still saved locally as before; logging is **in addition** (fire-and-forget). Because of browser security (`no-cors`), the page **cannot** read the HTTP response — if something is wrong, rows simply won’t appear in the sheet.
 
@@ -27,60 +27,98 @@ Create a blank spreadsheet. Copy its **ID** from the URL:
 ```javascript
 var SHEET_ID = "YOUR_SHEET_ID_HERE";
 
-function doPost(e) {
-  if (!e.postData || !e.postData.contents) {
-    return jsonOut({ ok: false, error: "no body" });
+/** Prefer form field `payload` (browser sends urlencoded); fall back to raw post body. */
+function getPayloadText_(e) {
+  if (e.parameter && e.parameter.payload) {
+    return String(e.parameter.payload);
   }
-  var o;
+  if (e.postData && e.postData.contents) {
+    return String(e.postData.contents);
+  }
+  return "";
+}
+
+function logError_(err) {
   try {
-    o = JSON.parse(e.postData.contents);
-  } catch (err) {
-    return jsonOut({ ok: false, error: "invalid json" });
+    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var sh = ss.getSheetByName("_voteLogErrors");
+    if (!sh) sh = ss.insertSheet("_voteLogErrors");
+    if (sh.getLastRow() === 0) {
+      sh.appendRow(["timestamp", "message", "stack"]);
+    }
+    sh.appendRow([new Date(), String(err && err.message ? err.message : err), String(err && err.stack ? err.stack : "")]);
+  } catch (x) {
+    /* ignore */
   }
+}
 
-  var ss = SpreadsheetApp.openById(SHEET_ID);
-  var sh = ss.getSheetByName("Votes");
-  if (!sh) sh = ss.insertSheet("Votes");
+function doGet() {
+  return ContentService.createTextOutput(
+    "Web app is reachable. Use POST from the image tools, or add ?ping=1 (you are GETting now).",
+  ).setMimeType(ContentService.MimeType.TEXT);
+}
 
-  if (sh.getLastRow() === 0) {
+function doPost(e) {
+  try {
+    var raw = getPayloadText_(e);
+    if (!raw) {
+      return jsonOut({ ok: false, error: "no payload — use form field `payload` or raw JSON body" });
+    }
+    var o;
+    try {
+      o = JSON.parse(raw);
+    } catch (err) {
+      logError_(err);
+      return jsonOut({ ok: false, error: "invalid json in payload" });
+    }
+
+    var ss = SpreadsheetApp.openById(SHEET_ID);
+    var sh = ss.getSheetByName("Votes");
+    if (!sh) sh = ss.insertSheet("Votes");
+
+    if (sh.getLastRow() === 0) {
+      sh.appendRow([
+        "timestamp",
+        "reviewerId",
+        "tool",
+        "sourceFile",
+        "activityId",
+        "vote",
+        "favouriteRank",
+        "favouriteMatchesRank1",
+        "imageUrl",
+        "rank1ImageUrl",
+        "qualityScore",
+        "sheetRank",
+        "slideIndex",
+        "slideTotal",
+        "payloadJson",
+      ]);
+    }
+
     sh.appendRow([
-      "timestamp",
-      "reviewerId",
-      "tool",
-      "sourceFile",
-      "activityId",
-      "vote",
-      "favouriteRank",
-      "favouriteMatchesRank1",
-      "imageUrl",
-      "rank1ImageUrl",
-      "qualityScore",
-      "sheetRank",
-      "slideIndex",
-      "slideTotal",
-      "payloadJson",
+      new Date(),
+      o.reviewerId || "",
+      o.tool || "",
+      o.sourceFile || "",
+      o.activityId || "",
+      o.vote !== undefined && o.vote !== null ? String(o.vote) : "",
+      o.favouriteRank !== undefined && o.favouriteRank !== null ? o.favouriteRank : "",
+      o.favouriteMatchesRank1 === true ? "TRUE" : o.favouriteMatchesRank1 === false ? "FALSE" : "",
+      o.imageUrl || o.favouriteImageUrl || "",
+      o.rank1ImageUrl || "",
+      o.qualityScore !== undefined && o.qualityScore !== null ? o.qualityScore : "",
+      o.sheetRank !== undefined && o.sheetRank !== null ? o.sheetRank : "",
+      o.slideIndex !== undefined && o.slideIndex !== null ? o.slideIndex : "",
+      o.slideTotal !== undefined && o.slideTotal !== null ? o.slideTotal : "",
+      raw,
     ]);
+
+    return jsonOut({ ok: true });
+  } catch (err) {
+    logError_(err);
+    return jsonOut({ ok: false, error: String(err && err.message ? err.message : err) });
   }
-
-  sh.appendRow([
-    new Date(),
-    o.reviewerId || "",
-    o.tool || "",
-    o.sourceFile || "",
-    o.activityId || "",
-    o.vote !== undefined && o.vote !== null ? String(o.vote) : "",
-    o.favouriteRank !== undefined && o.favouriteRank !== null ? o.favouriteRank : "",
-    o.favouriteMatchesRank1 === true ? "TRUE" : o.favouriteMatchesRank1 === false ? "FALSE" : "",
-    o.imageUrl || o.favouriteImageUrl || "",
-    o.rank1ImageUrl || "",
-    o.qualityScore !== undefined && o.qualityScore !== null ? o.qualityScore : "",
-    o.sheetRank !== undefined && o.sheetRank !== null ? o.sheetRank : "",
-    o.slideIndex !== undefined && o.slideIndex !== null ? o.slideIndex : "",
-    o.slideTotal !== undefined && o.slideTotal !== null ? o.slideTotal : "",
-    e.postData.contents,
-  ]);
-
-  return jsonOut({ ok: true });
 }
 
 function jsonOut(obj) {
@@ -103,6 +141,25 @@ Save the project (**Ctrl/Cmd+S**).
 
 Give yourself (and anyone who must **read** results) access to the spreadsheet. The script runs **as you**, so reviewers do **not** need edit access to the sheet.
 
+### 5. After you change the script
+
+**Deploy → Manage deployments → Edit (pencil) → Version: New version → Deploy.**  
+Otherwise the live `/exec` URL may still run old code.
+
+### 6. Troubleshooting (no rows in `Votes`)
+
+1. **Apps Script → Executions** (clock icon, left sidebar in the script editor). After you vote or click **Test send**, a **Completed** or **Failed** run should appear within ~1–2 minutes.
+   - **No run at all:** wrong Web app URL, logging not saved in the tool (checkbox + **Save**), or an extension/ad-blocker blocking `script.google.com`.
+   - **Failed (red):** open the run — common causes: wrong `SHEET_ID`, spreadsheet deleted, or first-time authorization not completed.
+
+2. **Paste the Web app URL in a new browser tab** — you should see plain text: “Web app is reachable…”. If you get 404 or Google sign-in errors, the deployment URL or **Who has access** is wrong.
+
+3. **You must click “Save logging settings”** after pasting the URL and turning the checkbox on (settings are stored in the browser).
+
+4. **Update the Apps Script** to the latest version in this repo’s `CENTRAL-LOGGING.md` (it reads `payload` from form posts). The tools now POST as **`application/x-www-form-urlencoded`**, which Google handles reliably.
+
+5. Check tab **`_voteLogErrors`** in the same spreadsheet — script errors are appended there when possible.
+
 ## Payload fields (reference)
 
 | Field | Slideshow | Grid |
@@ -123,7 +180,7 @@ All rows also include `reviewerId` and `clientTs` (set in the browser).
 
 ## Alternatives
 
-Any HTTPS endpoint that accepts **POST** with **raw JSON body** and `Content-Type: text/plain` can work; you must allow **anonymous** POSTs from browsers if the tool is public (CORS does not apply to `no-cors`, but your server must accept the request).
+Any HTTPS endpoint that accepts **POST** with either **`application/x-www-form-urlencoded`** body containing a **`payload`** field (JSON string), or a raw JSON **body**, can work; you must allow **anonymous** POSTs from browsers if the tool is public.
 
 ## Privacy
 

@@ -371,6 +371,20 @@
       return "";
     }
 
+    /** Column used only for display (grouping still uses Activity ID column). */
+    function guessActivityTitleColumn(headers) {
+      return guessColumn(headers, [
+        "activity_title",
+        "activity title",
+        "activity_name",
+        "activityname",
+        "experience_title",
+        "product_title",
+        "tour_title",
+        "title",
+      ]);
+    }
+
     function parseCSV(text) {
       const rows = [];
       let i = 0;
@@ -570,6 +584,8 @@
         return;
       }
 
+      const kTitle = guessActivityTitleColumn(headers);
+
       /** @type {Map<string, Map<number, { rank: number, imageUrl: string, qualityScore: number | null, raw: object }>>} */
       const byAct = new Map();
 
@@ -599,7 +615,21 @@
             return rankMap.has(r) ? rankMap.get(r) : null;
           })
         );
-        if (slots.some(Boolean)) list.push({ activityId, slots });
+        if (slots.some(Boolean)) {
+          let activityTitle = null;
+          if (kTitle) {
+            for (const slot of slots) {
+              if (slot && slot.raw) {
+                const t = String(slot.raw[kTitle] ?? "").trim();
+                if (t) {
+                  activityTitle = t;
+                  break;
+                }
+              }
+            }
+          }
+          list.push({ activityId, activityTitle, slots });
+        }
       }
 
       if (!list.length) {
@@ -668,13 +698,27 @@
     function render() {
       const item = activities[cursor];
       if (!item) return;
-      actLabel.textContent = "Activity: " + item.activityId;
-      idxLabel.textContent =
-        "Activity " +
-        (cursor + 1) +
-        " of " +
-        activities.length +
+      const progressSuffix =
         " · Green = Rank 1 · Purple = your pick · Random order · Picking advances to next";
+      if (item.activityTitle) {
+        actLabel.textContent = item.activityTitle;
+        idxLabel.textContent =
+          "ID " +
+          item.activityId +
+          " · Activity " +
+          (cursor + 1) +
+          " of " +
+          activities.length +
+          progressSuffix;
+      } else {
+        actLabel.textContent = "Activity: " + item.activityId;
+        idxLabel.textContent =
+          "Activity " +
+          (cursor + 1) +
+          " of " +
+          activities.length +
+          progressSuffix;
+      }
 
       const fav = picks[item.activityId] ?? null;
       gridEl.innerHTML = "";
@@ -733,6 +777,7 @@
             tool: "grid",
             sourceFile: fileName,
             activityId: act,
+            activityTitle: item.activityTitle || null,
             favouriteRank: null,
             action: "clear_favourite",
             rank1ImageUrl: item.slots[0] ? item.slots[0].imageUrl : null,
@@ -748,6 +793,7 @@
           tool: "grid",
           sourceFile: fileName,
           activityId: act,
+          activityTitle: item.activityTitle || null,
           favouriteRank: rank,
           favouriteMatchesRank1: rank === 1,
           favouriteImageUrl: slot.imageUrl,
@@ -769,6 +815,7 @@
             tool: "grid",
             sourceFile: fileName,
             activityId: item.activityId,
+            activityTitle: item.activityTitle || null,
             favouriteRank: null,
             action: "clear_favourite",
             rank1ImageUrl: item.slots[0] ? item.slots[0].imageUrl : null,
@@ -795,6 +842,7 @@
         const s1 = a.slots[0];
         return {
           activityId: a.activityId,
+          activityTitle: a.activityTitle || null,
           favouriteRank: fav,
           favouriteMatchesRank1: fav === 1,
           rank1ImageUrl: s1 ? s1.imageUrl : null,

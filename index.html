@@ -335,6 +335,20 @@
       return "";
     }
 
+    /** Column used only for display (grouping still uses Activity ID column). */
+    function guessActivityTitleColumn(headers) {
+      return guessColumn(headers, [
+        "activity_title",
+        "activity title",
+        "activity_name",
+        "activityname",
+        "experience_title",
+        "product_title",
+        "tour_title",
+        "title",
+      ]);
+    }
+
     function parseCSV(text) {
       const rows = [];
       let i = 0;
@@ -553,6 +567,8 @@
         return;
       }
 
+      const kTitle = guessActivityTitleColumn(headers);
+
       /** @type {Map<string, { __act: string, __url: string, __score: number|null, __rank: number|null, raw: object }>} */
       const byAct = new Map();
       for (const row of rawRows) {
@@ -573,13 +589,21 @@
         }
       }
 
-      const winners = [...byAct.values()].map((w) => ({
-        activityId: w.__act,
-        imageUrl: w.__url,
-        qualityScore: w.__score,
-        rank: w.__rank,
-        raw: w,
-      }));
+      const winners = [...byAct.values()].map((w) => {
+        let activityTitle = null;
+        if (kTitle) {
+          const t = String(w[kTitle] ?? "").trim();
+          if (t) activityTitle = t;
+        }
+        return {
+          activityId: w.__act,
+          activityTitle,
+          imageUrl: w.__url,
+          qualityScore: w.__score,
+          rank: w.__rank,
+          raw: w,
+        };
+      });
 
       if (!winners.length) {
         setError(
@@ -623,10 +647,15 @@
     function render() {
       const item = queue[cursor];
       if (!item) return;
-      actLabel.textContent = `Activity: ${item.activityId}`;
-      idxLabel.textContent = `${cursor + 1} / ${queue.length}`;
+      if (item.activityTitle) {
+        actLabel.textContent = item.activityTitle;
+        idxLabel.textContent = `ID ${item.activityId} · ${cursor + 1} / ${queue.length}`;
+      } else {
+        actLabel.textContent = `Activity: ${item.activityId}`;
+        idxLabel.textContent = `${cursor + 1} / ${queue.length}`;
+      }
       hero.src = item.imageUrl;
-      hero.alt = `Image for ${item.activityId}`;
+      hero.alt = `Image for ${item.activityTitle || item.activityId}`;
       const v = votes[item.activityId];
       votePill.classList.remove("up", "down");
       if (v === "up") {
@@ -651,6 +680,7 @@
           tool: "slideshow",
           sourceFile: fileName,
           activityId: k,
+          activityTitle: item.activityTitle || null,
           vote: val,
           imageUrl: item.imageUrl,
           qualityScore: item.qualityScore,
@@ -680,6 +710,7 @@
     btnExport.addEventListener("click", () => {
       const out = queue.map((q) => ({
         activityId: q.activityId,
+        activityTitle: q.activityTitle || null,
         vote: Object.prototype.hasOwnProperty.call(votes, q.activityId) ? votes[q.activityId] : null,
         imageUrl: q.imageUrl,
         qualityScore: q.qualityScore,
@@ -702,7 +733,7 @@
         } else if (ev.key === "ArrowRight" || ev.key === "d" || ev.key === "D") {
           ev.preventDefault();
           setVote("up");
-        } else         if (ev.key === "ArrowDown" || ev.key === "s" || ev.key === "S") {
+        } else if (ev.key === "ArrowDown" || ev.key === "s" || ev.key === "S") {
           ev.preventDefault();
           setVote(null);
         }

@@ -167,6 +167,7 @@ Otherwise the live `/exec` URL may still run old code.
 | `tool` | `slideshow` | `grid` |
 | `sourceFile` | uploaded file name | uploaded file name |
 | `activityId` | yes | yes |
+| `activityTitle` | optional (detected from e.g. `activity_title`) | optional (same) |
 | `vote` | `up` / `down` / `null` (skip/clear) | — |
 | `favouriteRank` | — | number or empty on clear |
 | `favouriteMatchesRank1` | — | boolean when applicable |
@@ -185,4 +186,4 @@ Any HTTPS endpoint that accepts **POST** with either **`application/x-www-form-u
 ## Privacy
 
 - Reviewers should only paste URLs **you** gave them.
-- The sheet will contain **activity IDs** and **image URLs**; treat the sheet like internal data.
+- The sheet will contain **activity IDs**, optional **titles** (when the sheet has a title column), and **image URLs**; treat the sheet like internal data.

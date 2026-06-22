@@ -47,7 +47,8 @@
 
   function getEndpoint() {
     try {
-      return (localStorage.getItem(K.endpoint) || "").trim();
+      const v = (localStorage.getItem(K.endpoint) || "").trim();
+      return v.startsWith("https://") ? v : "";
     } catch {
       return "";
     }
@@ -133,9 +134,15 @@
         /* ignore */
       }
       if (st) {
-        st.textContent = isOn()
-          ? "Saved. Each vote will be posted to your Google Form."
-          : "Saved. Turn on the checkbox and paste the form URL to enable logging.";
+        const raw = ep.value.trim();
+        if (raw && !raw.startsWith("https://")) {
+          st.textContent =
+            "URL must start with https:// — please re-enter the full formResponse URL.";
+        } else {
+          st.textContent = isOn()
+            ? "Saved. Each vote will be posted to your Google Form."
+            : "Saved. Turn on the checkbox and paste the form URL to enable logging.";
+        }
       }
     });
 

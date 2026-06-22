@@ -617,7 +617,10 @@
               }
             }
           }
-          list.push({ activityId, activityTitle, slots });
+          // Compact to filled slots only, then shuffle so image order is random.
+          const filledSlots = slots.filter(Boolean);
+          shuffleInPlace(filledSlots);
+          list.push({ activityId, activityTitle, slots: filledSlots });
         }
       }
 
@@ -658,29 +661,13 @@
       const act = activities[cursor]?.activityId;
       if (!act) return;
       const fav = picks[act];
-      const slot1 = activities[cursor].slots[0];
-
       verdictEl.classList.remove("match", "diff", "empty");
       if (fav == null) {
-        verdictEl.textContent = "Pick an image (click or press 1–8).";
+        verdictEl.textContent = "Pick your favourite image by clicking it.";
         verdictEl.classList.add("empty");
-        return;
-      }
-      if (!slot1) {
-        verdictEl.textContent =
-          "Your favourite: Rank " + fav + ". This activity has no Rank 1 image in the sheet — cannot compare.";
-        verdictEl.classList.add("diff");
-        return;
-      }
-      if (fav === 1) {
-        verdictEl.textContent = "Your favourite is Rank 1 — matches the sheet’s top-ranked image.";
-        verdictEl.classList.add("match");
       } else {
-        verdictEl.textContent =
-          "Your favourite: Rank " +
-          fav +
-          ". Sheet Rank 1 is the green frame. They differ — worth a second look at the scoring.";
-        verdictEl.classList.add("diff");
+        verdictEl.textContent = "\u2713 Pick saved.";
+        verdictEl.classList.add("match");
       }
     }
 
@@ -688,7 +675,7 @@
       const item = activities[cursor];
       if (!item) return;
       const progressSuffix =
-        " · Green = Rank 1 · Purple = your pick · Random order · Picking advances to next";
+        " · Purple = your pick · Picking advances to next";
       if (item.activityTitle) {
         actLabel.textContent = item.activityTitle;
         idxLabel.textContent =
@@ -711,53 +698,32 @@
 
       const fav = picks[item.activityId] ?? null;
       gridEl.innerHTML = "";
-      for (let i = 0; i < 8; i++) {
-        const rank = i + 1;
-        const slot = item.slots[i];
+      item.slots.forEach(function (slot, i) {
         const cell = document.createElement("div");
-        cell.className = "cell" + (rank === 1 && slot ? " rank1" : "") + (fav === rank && slot ? " picked" : "");
-        cell.dataset.rank = String(rank);
-        cell.tabIndex = slot ? 0 : -1;
-        cell.setAttribute("role", slot ? "button" : "presentation");
-
-        const badge = document.createElement("span");
-        badge.className = "badge" + (rank === 1 ? " r1" : "");
-        badge.textContent = "Rank " + rank;
-        cell.appendChild(badge);
-
-        if (slot && slot.qualityScore != null) {
-          const sc = document.createElement("span");
-          sc.className = "badge score";
-          sc.textContent = String(slot.qualityScore);
-          cell.appendChild(sc);
-        }
-
-        if (slot) {
-          const img = document.createElement("img");
-          img.src = slot.imageUrl;
-          img.alt = "Rank " + rank;
-          img.loading = "lazy";
-          cell.appendChild(img);
-          const dot = document.createElement("div");
-          dot.className = "pick-dot";
-          cell.appendChild(dot);
-          cell.addEventListener("click", () => setPick(rank));
-        } else {
-          cell.classList.add("empty");
-          cell.textContent = "No rank " + rank;
-        }
-
+        cell.className = "cell" + (fav === slot.rank ? " picked" : "");
+        cell.dataset.rank = String(slot.rank);
+        cell.tabIndex = 0;
+        cell.setAttribute("role", "button");
+        const img = document.createElement("img");
+        img.src = slot.imageUrl;
+        img.alt = "Image " + (i + 1);
+        img.loading = "lazy";
+        cell.appendChild(img);
+        const dot = document.createElement("div");
+        dot.className = "pick-dot";
+        cell.appendChild(dot);
+        cell.addEventListener("click", () => setPick(slot));
         gridEl.appendChild(cell);
-      }
+      });
 
       updateVerdict();
     }
 
-    function setPick(rank) {
+    function setPick(slot) {
       const item = activities[cursor];
-      if (!item || !item.slots[rank - 1]) return;
+      if (!item || !slot) return;
       const act = item.activityId;
-      const slot = item.slots[rank - 1];
+      const rank = slot.rank;
       if (picks[act] === rank) {
         picks[act] = null;
         persistPicks();
@@ -769,7 +735,7 @@
             activityTitle: item.activityTitle || null,
             favouriteRank: null,
             action: "clear_favourite",
-            rank1ImageUrl: item.slots[0] ? item.slots[0].imageUrl : null,
+            rank1ImageUrl: item.slots.find((s) => s.rank === 1)?.imageUrl ?? null,
           });
         }
         render();
@@ -787,7 +753,7 @@
           favouriteMatchesRank1: rank === 1,
           favouriteImageUrl: slot.imageUrl,
           imageUrl: slot.imageUrl,
-          rank1ImageUrl: item.slots[0] ? item.slots[0].imageUrl : null,
+          rank1ImageUrl: item.slots.find((s) => s.rank === 1)?.imageUrl ?? null,
           qualityScore: slot.qualityScore,
           sheetRank: rank,
         });
@@ -807,7 +773,7 @@
             activityTitle: item.activityTitle || null,
             favouriteRank: null,
             action: "clear_favourite",
-            rank1ImageUrl: item.slots[0] ? item.slots[0].imageUrl : null,
+            rank1ImageUrl: item.slots.find((s) => s.rank === 1)?.imageUrl ?? null,
           });
         }
         picks[item.activityId] = null;
@@ -834,7 +800,7 @@
           activityTitle: a.activityTitle || null,
           favouriteRank: fav,
           favouriteMatchesRank1: fav === 1,
-          rank1ImageUrl: s1 ? s1.imageUrl : null,
+          rank1ImageUrl: a.slots.find((s) => s.rank === 1)?.imageUrl ?? null,
           rank1QualityScore: s1 ? s1.qualityScore : null,
           ranks: a.slots.map((s, i) =>
             s
@@ -857,7 +823,9 @@
       const d = ev.key;
       if (d >= "1" && d <= "8") {
         ev.preventDefault();
-        setPick(Number(d));
+        const idx = Number(d) - 1;
+        const item = activities[cursor];
+        if (item && item.slots[idx]) setPick(item.slots[idx]);
       }
     });
 

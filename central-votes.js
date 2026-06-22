@@ -158,18 +158,26 @@
           if (st) st.textContent = "Turn on \u201cSend each\u2026\u201d and click Save logging settings first.";
           return;
         }
+        const testParams = makeParams({ tool: "ping", note: "manual test" });
+        console.log("[VoteCentral] POST to:", url);
+        console.log("[VoteCentral] body:", testParams.toString());
+        if (st) st.textContent = "Sending to: " + url;
         fetch(url, {
           method: "POST",
           mode: "no-cors",
           cache: "no-cache",
-          body: makeParams({ tool: "ping", note: "manual test from activity-image-slideshow" }),
-        }).catch(function () {});
-        if (st) {
-          st.textContent =
-            "Test ping sent (no-cors \u2014 browser cannot confirm delivery). " +
-            "Open your linked Google Sheet: you should see a new row with tool: ping within a few seconds. " +
-            "If nothing appears, the URL is wrong \u2014 it must end with /formResponse, not /viewform.";
-        }
+          body: testParams,
+        })
+          .then(function () {
+            if (st)
+              st.textContent =
+                "Sent! Check your linked Google Sheet for a new row with tool:ping. " +
+                "If nothing appears after 15 s, open DevTools \u2192 Console \u2014 the URL logged there must start with https://docs.google.com.";
+          })
+          .catch(function (err) {
+            console.error("[VoteCentral] fetch error:", err);
+            if (st) st.textContent = "Fetch error: " + String(err && err.message ? err.message : err);
+          });
       });
     }
   }

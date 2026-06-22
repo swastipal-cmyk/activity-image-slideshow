@@ -119,8 +119,9 @@
   <div class="load-primary">
     <h2>Live load (Cloudflare Worker)</h2>
     <p class="hint" style="margin-bottom:0.75rem">
-      Deploy the Worker in <code>cloudflare-worker/</code> (see README there), then paste your
-      <code>*.workers.dev</code> URL below. Refreshes every ~60s from the published Form Responses sheet.
+      For Agoda-restricted sheets, deploy the Worker with a <strong>Google service account</strong>
+      (share the spreadsheet with that email as Viewer) — see
+      <code>cloudflare-worker/README.md</code>. Then paste your <code>*.workers.dev</code> URL below.
     </p>
     <div class="load-bar" style="margin-bottom:0">
       <label>

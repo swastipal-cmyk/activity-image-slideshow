@@ -1,65 +1,82 @@
-# Cloudflare Worker — live results CSV proxy
+# Cloudflare Worker — live results for org-restricted Google Sheets
 
-The [results dashboard](../results.html) on GitHub Pages cannot `fetch` Google Sheets directly (browser CORS). This Worker fetches your **published CSV URL** server-side and returns it with `Access-Control-Allow-Origin` for GitHub Pages.
+Agoda Google Workspace often **cannot** uncheck “Restrict access” on **Publish to web**. Anonymous CSV URLs then return a login page — browsers and Workers both fail.
+
+**Fix:** use the **Google Sheets API** with a **service account**. You share the spreadsheet with that robot account as **Viewer** (allowed inside Agoda). The Worker reads the sheet with an API token.
 
 ## Prerequisites
 
-- A [Cloudflare](https://dash.cloudflare.com/sign-up) account (free tier is enough)
-- Node.js 18+ (for `npx wrangler`)
+- [Cloudflare](https://dash.cloudflare.com/sign-up) account (free)
+- Node.js 18+
+- Permission to **share** the Form Responses spreadsheet
 
-## 1. Publish the sheet (important)
+## 1. Google Cloud service account
 
-In Google Sheets: **File → Share → Publish to web**
+1. Open [Google Cloud Console](https://console.cloud.google.com/) → create or pick a project.
+2. **APIs & Services → Library** → enable **Google Sheets API**.
+3. **APIs & Services → Credentials → Create credentials → Service account**.
+4. Create the account → **Keys → Add key → JSON** → download the file.
 
-- Sheet: **Form Responses 1**
-- Format: **Comma-separated values (.csv)**
-- Copy the published link
+From the JSON file you need:
 
-**Uncheck “Restrict access to Agoda…”** if you want the Worker to read the CSV without Google sign-in. If that box stays checked, the Worker will get a login page (HTML) instead of CSV — same as the browser.
+- `client_email` → e.g. `results-reader@my-project.iam.gserviceaccount.com`
+- `private_key` → the long `-----BEGIN PRIVATE KEY-----` block
 
-Paste the full `…/pub?…&output=csv` URL into `wrangler.toml` → `[vars]` → `SHEET_CSV_URL`.
+## 2. Share the spreadsheet
 
-## 2. Deploy the Worker
+1. Open your Form Responses sheet:
+   `https://docs.google.com/spreadsheets/d/1EFAdD7fzORvoyjDnL2fZ6fCnn36RQKgg74HumpkHva0/edit`
+2. **Share** → add the **service account email** (`client_email`) as **Viewer**.
+3. Confirm the tab name is **Form Responses 1** (or update `SHEET_RANGE` in `wrangler.toml`).
+
+You do **not** need to change Publish to web or remove Agoda restriction.
+
+## 3. Configure the Worker
 
 ```bash
 cd cloudflare-worker
+
+# Paste client_email when prompted
+npx wrangler secret put GOOGLE_SERVICE_ACCOUNT_EMAIL
+
+# Paste the full private_key line from JSON (including -----BEGIN...-----)
+npx wrangler secret put GOOGLE_PRIVATE_KEY
+```
+
+`SPREADSHEET_ID` and `SHEET_RANGE` are already set in `wrangler.toml`.
+
+## 4. Deploy
+
+```bash
 npx wrangler login
 npx wrangler deploy
 ```
 
-Note the URL printed at the end, e.g.:
-
-`https://activity-votes-results-proxy.<your-subdomain>.workers.dev`
-
 Test:
 
 ```bash
-curl -s "https://activity-votes-results-proxy.<your-subdomain>.workers.dev/health"
-curl -s "https://activity-votes-results-proxy.<your-subdomain>.workers.dev/" | head -3
+curl -s "https://activity-votes-results-proxy.<subdomain>.workers.dev/health"
+# → {"ok":true,"mode":"sheets-api"}
+
+curl -s "https://activity-votes-results-proxy.<subdomain>.workers.dev/" | head -2
+# → Timestamp,payload,...  (CSV header row)
 ```
 
-You should see CSV text (timestamp + payload header), not HTML.
+## 5. Results page
 
-## 3. Wire the results page
-
-Open [results.html](https://swastipal-cmyk.github.io/activity-image-slideshow/results.html):
-
-1. Expand **Live load via Cloudflare Worker**
-2. Paste your Worker URL (no trailing path needed)
-3. Click **Load live**
-4. Click **Save Worker URL** so it auto-loads next time
-
-Or set the default in `results.html` → `DEFAULT_WORKER_URL` and push to GitHub Pages.
-
-## Update the sheet URL later
-
-Either edit `SHEET_CSV_URL` in `wrangler.toml` and run `npx wrangler deploy`, or in Cloudflare dashboard: **Workers → your worker → Settings → Variables**.
+1. Open [results.html](https://swastipal-cmyk.github.io/activity-image-slideshow/results.html)
+2. Paste Worker URL → **Save Worker URL** → **Load live**
 
 ## Troubleshooting
 
-| Symptom | Fix |
-|--------|-----|
-| `Received HTML instead of CSV` | Uncheck org restriction on Publish to web, or use CSV upload on results page |
-| `HTTP 401/403` from upstream | Same — publish must be readable without login |
-| CORS error on results page | Worker URL wrong, or origin not in `ALLOWED_ORIGINS` in `src/index.js` |
-| Empty table after load | CSV has no `payload` column or no `grid` picks yet |
+| Error | Fix |
+|-------|-----|
+| `GOOGLE_SERVICE_ACCOUNT_EMAIL ... not set` | Run both `wrangler secret put` commands |
+| `The caller does not have permission` | Share the sheet with the service account email |
+| `Unable to parse range` | Fix `SHEET_RANGE` tab name (e.g. `Form Responses 1!A:Z`) |
+| `invalid_grant` / JWT errors | Re-paste `private_key` with `\n` newlines intact |
+| Still using `published-url` mode | Remove `SHEET_CSV_URL` from vars; ensure secrets are set |
+
+## Fallback
+
+**File → Download → CSV** on the results page always works without Cloudflare.

@@ -57,42 +57,63 @@
   }
 
   /**
-   * POST vote to your endpoint. Uses application/x-www-form-urlencoded + `payload`
-   * (JSON string) so Google Apps Script reliably fills `e.parameter.payload`.
-   *
-   * Prefer `sendBeacon` for cross-origin POSTs: `fetch` + `no-cors` with a manual
-   * Content-Type can be rewritten to `text/plain`, which breaks form parsing on the server.
-   * When using `fetch`, pass a URLSearchParams object as `body` and omit Content-Type so
-   * the browser sets a CORS-safelisted `application/x-www-form-urlencoded` value.
-   *
+   * Build URLSearchParams containing the JSON payload.
+   * Passing URLSearchParams as the fetch `body` (with no custom Content-Type header)
+   * makes the browser set `application/x-www-form-urlencoded` automatically — a
+   * CORS-safelisted simple request, so no preflight fires and GAS doPost receives
+   * the body as e.parameter.payload.
+   */
+  function makeParams(record) {
+    const params = new URLSearchParams();
+    params.set(
+      "payload",
+      JSON.stringify({
+        ...record,
+        reviewerId: reviewerId(),
+        clientTs: new Date().toISOString(),
+      }),
+    );
+    return params;
+  }
+
+  /**
+   * Fire-and-forget POST for real votes (no-cors — response is opaque but body is sent).
+   * sendBeacon is NOT used: GAS /exec URLs redirect internally and sendBeacon does not
+   * follow redirects, so the POST would never reach doPost.
    * @param {Record<string, unknown>} record
    */
   function submit(record) {
     if (!isOn()) return;
     const url = getEndpoint();
     if (!url) return;
-    const body = JSON.stringify({
-      ...record,
-      reviewerId: reviewerId(),
-      clientTs: new Date().toISOString(),
-    });
-    const params = new URLSearchParams();
-    params.set("payload", body);
-
-    try {
-      if (typeof navigator.sendBeacon === "function" && navigator.sendBeacon(url, params)) {
-        return;
-      }
-    } catch {
-      /* fall through to fetch */
-    }
-
     fetch(url, {
       method: "POST",
       mode: "no-cors",
       cache: "no-cache",
-      body: params,
+      body: makeParams(record),
     }).catch(function () {});
+  }
+
+  /**
+   * Diagnostic POST for the Test send button.
+   * Uses regular cors mode so we can read the response and show it in the UI.
+   * @param {string} url
+   * @returns {Promise<string>}
+   */
+  function testPost(url) {
+    return fetch(url, {
+      method: "POST",
+      cache: "no-cache",
+      body: makeParams({ tool: "ping", note: "manual test from activity-image-slideshow" }),
+    })
+      .then(function (res) {
+        return res.text().then(function (text) {
+          return "HTTP " + res.status + ": " + text.slice(0, 300);
+        });
+      })
+      .catch(function (err) {
+        return "Error: " + String(err && err.message ? err.message : err);
+      });
   }
 
   function wireForm() {
@@ -127,7 +148,7 @@
       }
       if (st) {
         st.textContent = isOn()
-          ? "Saved. Each vote is sent to your endpoint (browser cannot confirm delivery — check the sheet and Apps Script → Executions)."
+          ? "Saved. Each vote is sent to your endpoint (use Test send to verify)."
           : "Saved. Turn on the checkbox and paste a valid Web app URL to enable logging.";
       }
     });
@@ -135,19 +156,33 @@
     const testBtn = document.getElementById("btnTestCentral");
     if (testBtn) {
       testBtn.addEventListener("click", function () {
-        if (!getEndpoint().trim()) {
+        const url = getEndpoint().trim();
+        if (!url) {
           if (st) st.textContent = "Paste a Web app URL first.";
           return;
         }
         if (!isOn()) {
-          if (st) st.textContent = "Turn on “Send each…” and click Save logging settings first.";
+          if (st) st.textContent = "Turn on \u201cSend each\u2026\u201d and click Save logging settings first.";
           return;
         }
-        submit({ tool: "ping", note: "manual test from activity-image-slideshow" });
-        if (st) {
-          st.textContent =
-            "Test event sent. Open Apps Script → Executions (clock icon) within 1–2 minutes. If you see no run, the Web app URL or deployment access is wrong. If the run is red, open it and read the error.";
-        }
+        if (st) st.textContent = "Sending\u2026";
+        testPost(url).then(function (result) {
+          if (!st) return;
+          if (result.includes('"ok":true')) {
+            st.textContent =
+              "\u2713 Success \u2014 " +
+              result +
+              " \u00b7 Check Apps Script \u2192 Executions and your Votes sheet.";
+          } else if (result.startsWith("Error:")) {
+            st.textContent =
+              result +
+              " \u00b7 Likely cause: wrong Web app URL, or \u201cWho has access\u201d is not set to Anyone in the Apps Script deployment.";
+          } else {
+            st.textContent =
+              result +
+              " \u00b7 Unexpected response \u2014 check Apps Script \u2192 Executions for the error.";
+          }
+        });
       });
     }
   }

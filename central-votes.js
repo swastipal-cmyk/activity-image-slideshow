@@ -79,6 +79,9 @@
         clientTs: new Date().toISOString(),
       }),
     );
+    // Hidden fields Google Forms expects for the submission to be recorded.
+    params.set("fvv", "1");
+    params.set("pageHistory", "0");
     return params;
   }
 

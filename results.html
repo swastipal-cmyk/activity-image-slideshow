@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Review results</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --border: #2e3147;
+      --text: #e8eaf0;
+      --muted: #7c82a0;
+      --accent: #6c7bff;
+      --green: #3dca7a;
+      --red: #e05c6e;
+      --yellow: #f5c842;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg); color: var(--text); font-family: system-ui, sans-serif; font-size: 14px; line-height: 1.5; }
+    header { padding: 1.5rem 2rem 1rem; border-bottom: 1px solid var(--border); }
+    header h1 { font-size: 1.2rem; font-weight: 600; margin-bottom: 0.25rem; }
+    header p { color: var(--muted); font-size: 0.85rem; max-width: 64rem; }
+    main { padding: 1.5rem 2rem; max-width: 120rem; }
+
+    /* load bar */
+    .load-bar { display: flex; gap: 0.75rem; align-items: flex-end; flex-wrap: wrap; margin-bottom: 1.5rem; }
+    .load-bar label { font-size: 0.8rem; color: var(--muted); display: flex; flex-direction: column; gap: 0.3rem; }
+    .load-bar input[type="url"] { background: var(--surface); border: 1px solid var(--border); color: var(--text); padding: 0.4rem 0.7rem; border-radius: 6px; font-size: 0.85rem; width: 28rem; }
+    .load-bar input[type="file"] { font-size: 0.8rem; color: var(--muted); }
+    button { background: var(--accent); color: #fff; border: none; padding: 0.4rem 1rem; border-radius: 6px; font-size: 0.85rem; cursor: pointer; }
+    button.sec { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+    button:hover { opacity: 0.85; }
+    .err { color: var(--red); font-size: 0.85rem; margin-top: 0.5rem; min-height: 1.2em; }
+
+    /* summary strip */
+    .summary { display: flex; gap: 2rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
+    .stat { display: flex; flex-direction: column; }
+    .stat .val { font-size: 1.6rem; font-weight: 700; line-height: 1; }
+    .stat .lbl { font-size: 0.75rem; color: var(--muted); margin-top: 0.15rem; }
+    .stat .val.green { color: var(--green); }
+    .stat .val.red { color: var(--red); }
+
+    /* filter row */
+    .filter-row { display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap; align-items: center; }
+    .filter-row span { font-size: 0.8rem; color: var(--muted); margin-right: 0.25rem; }
+    .filter-row button { padding: 0.25rem 0.75rem; font-size: 0.8rem; }
+    .filter-row button.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .filter-row input[type="search"] { background: var(--surface); border: 1px solid var(--border); color: var(--text); padding: 0.25rem 0.7rem; border-radius: 6px; font-size: 0.8rem; width: 14rem; }
+    .filter-row input[type="search"]::placeholder { color: var(--muted); }
+
+    /* table */
+    .tbl-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.83rem; }
+    thead th { text-align: left; padding: 0.5rem 0.75rem; font-size: 0.75rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 1px solid var(--border); white-space: nowrap; cursor: pointer; user-select: none; }
+    thead th:hover { color: var(--text); }
+    thead th .sort-arrow { margin-left: 0.3rem; opacity: 0.4; }
+    thead th.sorted .sort-arrow { opacity: 1; color: var(--accent); }
+    tbody tr { border-bottom: 1px solid var(--border); }
+    tbody tr:hover { background: var(--surface); }
+    tbody td { padding: 0.45rem 0.75rem; vertical-align: middle; }
+
+    .activity-name { font-weight: 500; max-width: 22rem; }
+    .activity-id { color: var(--muted); font-size: 0.75rem; }
+
+    .thumb { width: 52px; height: 36px; object-fit: cover; border-radius: 3px; display: block; background: var(--border); }
+    .thumbs { display: flex; gap: 4px; flex-wrap: wrap; }
+
+    .agree-badge { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600; }
+    .agree-badge.agree { background: rgba(61,202,122,.15); color: var(--green); }
+    .agree-badge.disagree { background: rgba(224,92,110,.15); color: var(--red); }
+    .agree-badge.split { background: rgba(245,200,66,.12); color: var(--yellow); }
+    .agree-badge.one { background: var(--surface); color: var(--muted); }
+
+    .bar-wrap { display: flex; gap: 2px; height: 8px; width: 80px; border-radius: 4px; overflow: hidden; background: var(--border); }
+    .bar-seg { height: 100%; }
+    .bar-seg.r1 { background: var(--green); }
+    .bar-seg.other { background: var(--red); }
+
+    .empty-state { padding: 3rem 1rem; text-align: center; color: var(--muted); }
+  </style>
+</head>
+<body>
+<header>
+  <h1>Review results</h1>
+  <p>Aggregated picks from all reviewers. For each activity: is the image the algorithm scores highest (Rank 1) also the one reviewers prefer?</p>
+</header>
+<main>
+  <div class="load-bar">
+    <label>
+      Published CSV URL
+      <input type="url" id="csvUrl" placeholder="https://docs.google.com/spreadsheets/d/…/export?format=csv&gid=…" />
+    </label>
+    <button id="btnFetch">Load from URL</button>
+    <label>
+      — or upload CSV export —
+      <input type="file" id="csvFile" accept=".csv" />
+    </label>
+  </div>
+  <div class="err" id="errBox"></div>
+
+  <div id="results" style="display:none">
+    <div class="summary" id="summaryStrip"></div>
+    <div class="filter-row">
+      <span>Show:</span>
+      <button class="sec active" data-filter="all">All</button>
+      <button class="sec" data-filter="agree">Majority agrees with Rank 1</button>
+      <button class="sec" data-filter="disagree">Majority disagrees</button>
+      <button class="sec" data-filter="split">Split</button>
+      <input type="search" id="searchBox" placeholder="Search activity…" />
+    </div>
+    <div class="tbl-wrap">
+      <table id="mainTable">
+        <thead>
+          <tr>
+            <th data-col="title">Activity <span class="sort-arrow">↕</span></th>
+            <th data-col="reviewers" class="sorted">Reviewers <span class="sort-arrow">↓</span></th>
+            <th data-col="pctRank1">% picked Rank 1 <span class="sort-arrow">↕</span></th>
+            <th data-col="verdict">Verdict <span class="sort-arrow">↕</span></th>
+            <th>Rank 1 image</th>
+            <th>Picks (Rank 1 first)</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+  </div>
+</main>
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const csvUrl = $("csvUrl");
+  const csvFile = $("csvFile");
+  const btnFetch = $("btnFetch");
+  const errBox = $("errBox");
+  const results = $("results");
+  const summaryStrip = $("summaryStrip");
+  const tableBody = $("tableBody");
+  const searchBox = $("searchBox");
+
+  let allRows = [];
+  let sortCol = "reviewers";
+  let sortDir = -1; // -1 = desc
+  let filterMode = "all";
+
+  // ── CSV parse ──────────────────────────────────────────────────────────────
+  function parseCSV(text) {
+    const rows = [];
+    let i = 0;
+    const field = () => {
+      let s = "";
+      if (text[i] === '"') {
+        i++;
+        while (i < text.length) {
+          if (text[i] === '"' && text[i + 1] === '"') { s += '"'; i += 2; }
+          else if (text[i] === '"') { i++; break; }
+          else s += text[i++];
+        }
+      } else {
+        while (i < text.length && text[i] !== "," && text[i] !== "\n" && text[i] !== "\r") s += text[i++];
+      }
+      return s;
+    };
+    const line = () => {
+      const r = [];
+      while (i < text.length) {
+        r.push(field());
+        if (text[i] === ",") { i++; continue; }
+        if (text[i] === "\r") i++;
+        if (text[i] === "\n") { i++; break; }
+        if (i >= text.length) break;
+      }
+      return r;
+    };
+    const hdr = line().map((h) => h.trim().toLowerCase());
+    while (i < text.length) {
+      const r = line();
+      if (r.every((c) => !c.trim())) continue;
+      const obj = {};
+      hdr.forEach((h, j) => (obj[h] = r[j] !== undefined ? r[j] : ""));
+      rows.push(obj);
+    }
+    return { headers: hdr, rows };
+  }
+
+  // ── aggregate ──────────────────────────────────────────────────────────────
+  function aggregate(csvRows) {
+    // find payload column (column header contains "payload")
+    const sample = csvRows[0];
+    if (!sample) return [];
+    const payloadKey = Object.keys(sample).find((k) => k.includes("payload"));
+    if (!payloadKey) {
+      setError('No "payload" column found. Make sure you exported the Form Responses sheet.');
+      return [];
+    }
+
+    // parse JSON, filter to grid picks only
+    const entries = [];
+    for (const row of csvRows) {
+      let o;
+      try { o = JSON.parse(row[payloadKey]); } catch { continue; }
+      if (!o || o.tool !== "grid" || !o.activityId || o.favouriteRank == null) continue;
+      entries.push(o);
+    }
+
+    if (!entries.length) {
+      setError("No grid pick entries found in the payload column. Make sure reviewers have used the grid tool and submitted picks.");
+      return [];
+    }
+
+    // group by activityId → reviewerId → latest entry (by clientTs)
+    const byAct = new Map();
+    for (const e of entries) {
+      if (!byAct.has(e.activityId)) byAct.set(e.activityId, new Map());
+      const byRev = byAct.get(e.activityId);
+      const existing = byRev.get(e.reviewerId);
+      if (!existing || e.clientTs > existing.clientTs) byRev.set(e.reviewerId, e);
+    }
+
+    const result = [];
+    for (const [activityId, byRev] of byAct) {
+      const picks = [...byRev.values()];
+      // rank → count
+      const rankCounts = {};
+      for (const p of picks) {
+        rankCounts[p.favouriteRank] = (rankCounts[p.favouriteRank] || 0) + 1;
+      }
+      const totalPicks = picks.length;
+      const rank1Count = rankCounts[1] || 0;
+      const pctRank1 = totalPicks ? rank1Count / totalPicks : 0;
+
+      // majority rank
+      const majorityRank = Object.entries(rankCounts).sort((a, b) => b[1] - a[1])[0][0];
+      const majorityCount = rankCounts[majorityRank];
+      const majority = Number(majorityRank);
+
+      // verdict
+      let verdict;
+      if (totalPicks === 1) verdict = "one";
+      else if (majority === 1) verdict = "agree";
+      else if (majorityCount > totalPicks / 2) verdict = "disagree";
+      else verdict = "split";
+
+      // images
+      const rank1ImageUrl = picks.find((p) => p.rank1ImageUrl)?.rank1ImageUrl || "";
+      // collect all picked images in rank order (rank 1 first if present)
+      const imageByRank = {};
+      for (const p of picks) {
+        if (!imageByRank[p.favouriteRank]) imageByRank[p.favouriteRank] = { url: p.favouriteImageUrl || p.imageUrl, count: 0 };
+        imageByRank[p.favouriteRank].count++;
+      }
+      const sortedImages = Object.entries(imageByRank)
+        .sort(([rA, dA], [rB, dB]) => dB.count - dA.count || Number(rA) - Number(rB))
+        .map(([rank, d]) => ({ rank: Number(rank), url: d.url, count: d.count }));
+
+      result.push({
+        activityId,
+        activityTitle: picks.find((p) => p.activityTitle)?.activityTitle || activityId,
+        totalPicks,
+        rank1Count,
+        pctRank1,
+        majorityRank: majority,
+        verdict,
+        rank1ImageUrl,
+        sortedImages,
+        rankCounts,
+      });
+    }
+    return result;
+  }
+
+  // ── render ─────────────────────────────────────────────────────────────────
+  function setError(msg) { errBox.textContent = msg || ""; }
+
+  function renderSummary(rows) {
+    const total = rows.length;
+    const agree = rows.filter((r) => r.verdict === "agree").length;
+    const disagree = rows.filter((r) => r.verdict === "disagree").length;
+    const split = rows.filter((r) => r.verdict === "split").length;
+    const totalReviewers = new Set(/* computed below */);
+    summaryStrip.innerHTML = [
+      stat(total, "Activities reviewed"),
+      stat(agree, "Majority agrees with Rank 1", "green"),
+      stat(disagree, "Majority disagrees", "red"),
+      stat(split, "Split vote", ""),
+    ].join("");
+  }
+
+  function stat(val, lbl, cls) {
+    return `<div class="stat"><div class="val ${cls || ""}">${val}</div><div class="lbl">${lbl}</div></div>`;
+  }
+
+  function verdictLabel(v) {
+    if (v === "agree") return '<span class="agree-badge agree">Majority agrees</span>';
+    if (v === "disagree") return '<span class="agree-badge disagree">Majority disagrees</span>';
+    if (v === "split") return '<span class="agree-badge split">Split</span>';
+    return '<span class="agree-badge one">Single reviewer</span>';
+  }
+
+  function thumbsHtml(images, rank1ImageUrl) {
+    return images
+      .map((img) => {
+        if (!img.url) return "";
+        const isR1 = img.rank === 1;
+        const style = isR1 ? ' style="outline:2px solid var(--green);outline-offset:1px"' : "";
+        return `<img class="thumb" src="${esc(img.url)}" title="Rank ${img.rank} (${img.count} pick${img.count > 1 ? "s" : ""})"${style} loading="lazy">`;
+      })
+      .join("");
+  }
+
+  function esc(s) { return String(s).replace(/"/g, "&quot;").replace(/</g, "&lt;"); }
+
+  function barHtml(rank1Count, total) {
+    if (!total) return "";
+    const w1 = Math.round((rank1Count / total) * 80);
+    const w2 = 80 - w1;
+    return `<div class="bar-wrap"><div class="bar-seg r1" style="width:${w1}px"></div><div class="bar-seg other" style="width:${w2}px"></div></div>`;
+  }
+
+  function sortRows(rows) {
+    return [...rows].sort((a, b) => {
+      let va, vb;
+      if (sortCol === "title") { va = a.activityTitle.toLowerCase(); vb = b.activityTitle.toLowerCase(); }
+      else if (sortCol === "reviewers") { va = a.totalPicks; vb = b.totalPicks; }
+      else if (sortCol === "pctRank1") { va = a.pctRank1; vb = b.pctRank1; }
+      else if (sortCol === "verdict") { const ord = { disagree: 0, split: 1, one: 2, agree: 3 }; va = ord[a.verdict] ?? 9; vb = ord[b.verdict] ?? 9; }
+      else { va = a[sortCol]; vb = b[sortCol]; }
+      if (va < vb) return sortDir;
+      if (va > vb) return -sortDir;
+      return 0;
+    });
+  }
+
+  function filterRows(rows) {
+    let out = rows;
+    if (filterMode !== "all") out = out.filter((r) => r.verdict === filterMode);
+    const q = searchBox.value.trim().toLowerCase();
+    if (q) out = out.filter((r) => r.activityTitle.toLowerCase().includes(q) || r.activityId.toLowerCase().includes(q));
+    return out;
+  }
+
+  function renderTable() {
+    const visible = filterRows(sortRows(allRows));
+    if (!visible.length) {
+      tableBody.innerHTML = '<tr><td colspan="6" class="empty-state">No activities match the current filter.</td></tr>';
+      return;
+    }
+    tableBody.innerHTML = visible.map((r) => `
+      <tr>
+        <td><div class="activity-name">${esc(r.activityTitle)}</div><div class="activity-id">${esc(r.activityId)}</div></td>
+        <td>${r.totalPicks}</td>
+        <td>
+          ${Math.round(r.pctRank1 * 100)}%
+          <br>${barHtml(r.rank1Count, r.totalPicks)}
+          <span style="font-size:0.72rem;color:var(--muted)">${r.rank1Count}/${r.totalPicks}</span>
+        </td>
+        <td>${verdictLabel(r.verdict)}</td>
+        <td>${r.rank1ImageUrl ? `<img class="thumb" src="${esc(r.rank1ImageUrl)}" loading="lazy">` : '<span style="color:var(--muted)">—</span>'}</td>
+        <td><div class="thumbs">${thumbsHtml(r.sortedImages, r.rank1ImageUrl)}</div></td>
+      </tr>`).join("");
+  }
+
+  function loadData(text) {
+    setError("");
+    const { rows } = parseCSV(text);
+    if (!rows.length) { setError("CSV appears empty."); return; }
+    allRows = aggregate(rows);
+    if (!allRows.length) return;
+    results.style.display = "";
+    renderSummary(allRows);
+    renderTable();
+  }
+
+  // ── events ─────────────────────────────────────────────────────────────────
+  btnFetch.addEventListener("click", () => {
+    const url = csvUrl.value.trim();
+    if (!url) { setError("Paste a published CSV URL first."); return; }
+    setError("Fetching…");
+    fetch(url)
+      .then((r) => { if (!r.ok) throw new Error("HTTP " + r.status); return r.text(); })
+      .then((text) => { try { localStorage.setItem("results-csv-url-v1", url); } catch {} loadData(text); })
+      .catch((e) => setError("Failed to fetch: " + e.message + " — make sure the sheet is published as CSV (File → Share → Publish to web)."));
+  });
+
+  csvFile.addEventListener("change", () => {
+    const f = csvFile.files[0];
+    if (!f) return;
+    const reader = new FileReader();
+    reader.onload = (e) => loadData(String(e.target.result));
+    reader.readAsText(f);
+  });
+
+  searchBox.addEventListener("input", renderTable);
+
+  document.querySelectorAll("[data-filter]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      filterMode = btn.dataset.filter;
+      document.querySelectorAll("[data-filter]").forEach((b) => b.classList.toggle("active", b === btn));
+      renderTable();
+    });
+  });
+
+  document.querySelectorAll("thead th[data-col]").forEach((th) => {
+    th.addEventListener("click", () => {
+      const col = th.dataset.col;
+      if (sortCol === col) sortDir = -sortDir;
+      else { sortCol = col; sortDir = -1; }
+      document.querySelectorAll("thead th[data-col]").forEach((h) => {
+        h.classList.toggle("sorted", h === th);
+        h.querySelector(".sort-arrow").textContent = h === th ? (sortDir === -1 ? "↓" : "↑") : "↕";
+      });
+      renderTable();
+    });
+  });
+
+  // restore saved URL
+  try {
+    const saved = localStorage.getItem("results-csv-url-v1");
+    if (saved) csvUrl.value = saved;
+  } catch {}
+})();
+</script>
+</body>
+</html>

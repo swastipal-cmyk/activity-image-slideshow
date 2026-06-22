@@ -5,9 +5,11 @@ Two static pages (same load / column mapping pattern), plus optional central log
 | File | Purpose |
 |------|--------|
 | **`index.html`** | One **rank = 1** image per activity — thumbs up/down, auto-advance. |
-| **`image-grid-compare.html`** | All **ranks 1–8** side by side — **green** = sheet Rank 1, click or **1–8** keys for your **favourite**, verdict vs Rank 1, JSON export. |
-| **`central-votes.js`** | Shared helper: optional **POST to your Web app** so votes land in one place (e.g. Google Sheet). |
-| **`CENTRAL-LOGGING.md`** | Step-by-step: **Google Apps Script + Sheet** receiver (or any HTTPS POST endpoint). |
+| **`image-grid-compare.html`** | All **ranks 1–8** side by side — pick your **favourite**, auto-advance, JSON export. |
+| **`results.html`** | Aggregate reviewer picks vs sheet Rank 1 — upload CSV or **live load** via Cloudflare Worker. |
+| **`central-votes.js`** | Always-on POST to **Google Form** so picks land in one sheet. |
+| **`CENTRAL-LOGGING.md`** | Google Form setup for central logging. |
+| **`cloudflare-worker/`** | Optional Worker proxy so `results.html` can load live CSV from GitHub Pages. |
 | **`data/all-activities-web.csv`** | Bundled **All Activities** export (~8.5k rows, URLs only) — **auto-loaded** on GitHub Pages. |
 | **`scripts/export-all-activities-web-csv.py`** | Regenerate that CSV from your full `.xlsx` (see below). |
 
@@ -29,9 +31,16 @@ Then commit and push `data/all-activities-web.csv`.
 
 **Other sheets:** click **Upload a different file…** and use **Parse** as before.
 
+### Review results dashboard
+
+Open **`results.html`** on GitHub Pages to see whether reviewers’ favourites match the sheet’s Rank 1 image per activity.
+
+- **CSV upload** — always works (`File → Download → CSV` on Form Responses).
+- **Live load** — deploy **`cloudflare-worker/`** (see its README), paste the `*.workers.dev` URL into the results page.
+
 ### Central vote log (many reviewers)
 
-Both HTML tools include **Central vote log (optional)** at the **top of the page** (above file upload); it **stays visible** while you review so you can paste the Web app URL, **Save**, and **Test send** after the grid or slideshow has opened. Use **Test send** once and confirm a run appears under **Apps Script → Executions**. Votes are still stored locally; when logging is on, each action is also **POSTed** to your URL. Full setup: **`CENTRAL-LOGGING.md`**.
+Both HTML tools include **Vote log** at the top: enter name/initials and **Save name**. Every pick is POSTed to the shared Google Form. Setup: **`CENTRAL-LOGGING.md`**.
 
 ## Why not open the SharePoint link directly?
 

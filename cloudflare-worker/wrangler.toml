@@ -1,0 +1,7 @@
+name = "activity-votes-results-proxy"
+main = "src/index.js"
+compatibility_date = "2024-06-01"
+
+# Published Form Responses CSV (update gid if you link a different tab).
+[vars]
+SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRgnRQwsqs9Y0wT7EqC2m704p0_eWSJdJTmwVKztXIVrHmsF3xHvhfqVLNcUuWFoOyCuPUWPcJiWqzt/pub?gid=349027440&single=true&output=csv"

@@ -117,7 +117,23 @@
 </header>
 <main>
   <div class="load-primary">
-    <h2>Load responses (recommended)</h2>
+    <h2>Live load (Cloudflare Worker)</h2>
+    <p class="hint" style="margin-bottom:0.75rem">
+      Deploy the Worker in <code>cloudflare-worker/</code> (see README there), then paste your
+      <code>*.workers.dev</code> URL below. Refreshes every ~60s from the published Form Responses sheet.
+    </p>
+    <div class="load-bar" style="margin-bottom:0">
+      <label>
+        Worker URL
+        <input type="url" id="workerUrl" placeholder="https://activity-votes-results-proxy.your-subdomain.workers.dev" />
+      </label>
+      <button id="btnLoadWorker">Load live</button>
+      <button type="button" id="btnSaveWorker" class="sec">Save Worker URL</button>
+    </div>
+  </div>
+
+  <div class="load-primary" style="margin-top:1rem">
+    <h2>Or upload CSV export</h2>
     <ol>
       <li>Open your <strong>Form Responses</strong> sheet in Google Sheets.</li>
       <li><strong>File → Download → Comma-separated values (.csv)</strong></li>
@@ -180,6 +196,9 @@
   const csvUrl = $("csvUrl");
   const csvFile = $("csvFile");
   const btnFetch = $("btnFetch");
+  const workerUrl = $("workerUrl");
+  const btnLoadWorker = $("btnLoadWorker");
+  const btnSaveWorker = $("btnSaveWorker");
   const errBox = $("errBox");
   const results = $("results");
   const summaryStrip = $("summaryStrip");
@@ -190,6 +209,44 @@
   let sortCol = "reviewers";
   let sortDir = -1; // -1 = desc
   let filterMode = "all";
+
+  /** Set this after you deploy the Worker (see cloudflare-worker/README.md). */
+  const DEFAULT_WORKER_URL = "";
+  const K_WORKER = "results-worker-url-v1";
+
+  function normalizeWorkerUrl(url) {
+    return String(url || "").trim().replace(/\/$/, "");
+  }
+
+  function fetchWorkerCsv(url) {
+    const base = normalizeWorkerUrl(url);
+    if (!base.startsWith("https://")) {
+      setError("Worker URL must start with https://");
+      return Promise.reject(new Error("invalid url"));
+    }
+    setError("Loading live data…");
+    return fetch(base, { cache: "no-store" })
+      .then(async (r) => {
+        const text = await r.text();
+        if (!r.ok) {
+          let msg = text.slice(0, 300);
+          try {
+            const j = JSON.parse(text);
+            if (j.error) msg = j.error;
+          } catch {
+            /* plain text */
+          }
+          throw new Error(msg);
+        }
+        if (text.trim().startsWith("<!DOCTYPE") || text.trim().startsWith("<html")) {
+          throw new Error(
+            "Worker returned a login page. In Google Sheets publish settings, uncheck Restrict access to Agoda.",
+          );
+        }
+        loadData(text);
+        setError("");
+      });
+  }
 
   // ── CSV parse ──────────────────────────────────────────────────────────────
   function parseCSV(text) {
@@ -420,6 +477,35 @@
   }
 
   // ── events ─────────────────────────────────────────────────────────────────
+  btnLoadWorker.addEventListener("click", () => {
+    const url = workerUrl.value.trim();
+    if (!url) {
+      setError("Paste your Cloudflare Worker URL first.");
+      return;
+    }
+    fetchWorkerCsv(url).catch((e) =>
+      setError(
+        "Live load failed: " +
+          String(e && e.message ? e.message : e) +
+          " — see cloudflare-worker/README.md or use CSV upload.",
+      ),
+    );
+  });
+
+  btnSaveWorker.addEventListener("click", () => {
+    const url = normalizeWorkerUrl(workerUrl.value);
+    if (!url) {
+      setError("Paste a Worker URL to save.");
+      return;
+    }
+    try {
+      localStorage.setItem(K_WORKER, url);
+    } catch {
+      /* ignore */
+    }
+    setError("Worker URL saved — click Load live (or refresh the page to auto-load).");
+  });
+
   btnFetch.addEventListener("click", () => {
     const url = csvUrl.value.trim();
     if (!url) { setError("Paste a published CSV URL first."); return; }
@@ -469,8 +555,15 @@
     });
   });
 
-  // restore saved URL
+  // restore saved URLs; auto-load Worker if configured
   try {
+    const savedWorker = localStorage.getItem(K_WORKER) || DEFAULT_WORKER_URL;
+    if (savedWorker) {
+      workerUrl.value = savedWorker;
+      fetchWorkerCsv(savedWorker).catch(() => {
+        /* silent on auto-load — user can upload CSV or click Load live */
+      });
+    }
     const saved = localStorage.getItem("results-csv-url-v1");
     if (saved) csvUrl.value = saved;
   } catch {}

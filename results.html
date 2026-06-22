@@ -78,6 +78,36 @@
     .bar-seg.other { background: var(--red); }
 
     .empty-state { padding: 3rem 1rem; text-align: center; color: var(--muted); }
+
+    .load-primary {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem 1.25rem;
+      margin-bottom: 1rem;
+      max-width: 42rem;
+    }
+    .load-primary h2 { font-size: 0.95rem; font-weight: 600; margin-bottom: 0.5rem; }
+    .load-primary ol { margin: 0 0 0.75rem 1.1rem; color: var(--muted); font-size: 0.85rem; }
+    .load-primary ol li { margin-bottom: 0.25rem; }
+    .load-primary input[type="file"] { font-size: 0.85rem; color: var(--text); margin-top: 0.25rem; }
+
+    .load-advanced { margin-top: 1rem; }
+    .load-advanced summary {
+      cursor: pointer;
+      font-size: 0.8rem;
+      color: var(--muted);
+      user-select: none;
+    }
+    .load-advanced .load-bar { margin-top: 0.75rem; margin-bottom: 0; }
+    .hint {
+      font-size: 0.8rem;
+      color: var(--muted);
+      max-width: 52rem;
+      margin-top: 0.5rem;
+      line-height: 1.45;
+    }
+    .hint strong { color: var(--text); font-weight: 500; }
   </style>
 </head>
 <body>
@@ -86,17 +116,35 @@
   <p>Aggregated picks from all reviewers. For each activity: is the image the algorithm scores highest (Rank 1) also the one reviewers prefer?</p>
 </header>
 <main>
-  <div class="load-bar">
+  <div class="load-primary">
+    <h2>Load responses (recommended)</h2>
+    <ol>
+      <li>Open your <strong>Form Responses</strong> sheet in Google Sheets.</li>
+      <li><strong>File → Download → Comma-separated values (.csv)</strong></li>
+      <li>Upload the file below.</li>
+    </ol>
     <label>
-      Published CSV URL
-      <input type="url" id="csvUrl" placeholder="https://docs.google.com/spreadsheets/d/…/export?format=csv&gid=…" />
-    </label>
-    <button id="btnFetch">Load from URL</button>
-    <label>
-      — or upload CSV export —
+      Upload CSV export
       <input type="file" id="csvFile" accept=".csv" />
     </label>
   </div>
+
+  <details class="load-advanced">
+    <summary>Try published CSV URL (often blocked — see note)</summary>
+    <div class="load-bar">
+      <label>
+        Published CSV URL
+        <input type="url" id="csvUrl" placeholder="https://docs.google.com/spreadsheets/d/e/…/pub?…&output=csv" />
+      </label>
+      <button id="btnFetch">Load from URL</button>
+    </div>
+    <p class="hint">
+      <strong>Why URL load usually fails:</strong> Browsers on GitHub Pages cannot fetch Google Sheets directly (CORS).
+      If publish settings restrict access to <strong>Agoda</strong>, anonymous pages cannot read the sheet even when published.
+      Use the CSV upload above — it always works.
+    </p>
+  </details>
+
   <div class="err" id="errBox"></div>
 
   <div id="results" style="display:none">
@@ -379,7 +427,15 @@
     fetch(url)
       .then((r) => { if (!r.ok) throw new Error("HTTP " + r.status); return r.text(); })
       .then((text) => { try { localStorage.setItem("results-csv-url-v1", url); } catch {} loadData(text); })
-      .catch((e) => setError("Failed to fetch: " + e.message + " — make sure the sheet is published as CSV (File → Share → Publish to web)."));
+      .catch((e) => {
+        const msg = String(e && e.message ? e.message : e);
+        setError(
+          "Could not load from URL (" +
+            msg +
+            "). This is expected when the sheet is org-restricted or the browser blocks cross-origin requests. " +
+            "Use File → Download → CSV on the Form Responses sheet, then upload the file above.",
+        );
+      });
   });
 
   csvFile.addEventListener("change", () => {

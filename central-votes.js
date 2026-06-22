@@ -1,8 +1,15 @@
 /**
  * Optional central logging for static GitHub Pages builds.
- * POSTs votes as application/x-www-form-urlencoded (`payload` = JSON) for Google Apps Script.
+ * POSTs votes to a Google Form (no-cors, anonymous — no Apps Script auth required).
+ *
+ * Form submit URL: https://docs.google.com/forms/d/e/1FAIpQLScS6dPM03tl8tBi353khzTqYb9LBc_pwhLqA1Edz2AUnTURkw/formResponse
+ * Paste that URL into the "Form URL" field in the tool.
+ * If you recreate the form, update FORM_ENTRY below to match the new entry ID.
  */
 (function (global) {
+  /** Google Form entry field ID for the single "payload" question. */
+  const FORM_ENTRY = "entry.1845975560";
+
   const K = {
     endpoint: "vote-central-endpoint-v1",
     reviewer: "vote-central-reviewer-v1",
@@ -57,16 +64,15 @@
   }
 
   /**
-   * Build URLSearchParams containing the JSON payload.
-   * Passing URLSearchParams as the fetch `body` (with no custom Content-Type header)
-   * makes the browser set `application/x-www-form-urlencoded` automatically — a
-   * CORS-safelisted simple request, so no preflight fires and GAS doPost receives
-   * the body as e.parameter.payload.
+   * Build URLSearchParams for a Google Form POST.
+   * The single form field (FORM_ENTRY) receives the full JSON payload as text.
+   * Passing URLSearchParams as fetch body (no custom Content-Type) produces a
+   * CORS-safelisted simple request — Google Forms accept this without authentication.
    */
   function makeParams(record) {
     const params = new URLSearchParams();
     params.set(
-      "payload",
+      FORM_ENTRY,
       JSON.stringify({
         ...record,
         reviewerId: reviewerId(),
@@ -77,9 +83,8 @@
   }
 
   /**
-   * Fire-and-forget POST for real votes (no-cors — response is opaque but body is sent).
-   * sendBeacon is NOT used: GAS /exec URLs redirect internally and sendBeacon does not
-   * follow redirects, so the POST would never reach doPost.
+   * Fire-and-forget POST to Google Form for real votes.
+   * no-cors: response is opaque but the submission reaches the form.
    * @param {Record<string, unknown>} record
    */
   function submit(record) {
@@ -92,28 +97,6 @@
       cache: "no-cache",
       body: makeParams(record),
     }).catch(function () {});
-  }
-
-  /**
-   * Diagnostic POST for the Test send button.
-   * Uses regular cors mode so we can read the response and show it in the UI.
-   * @param {string} url
-   * @returns {Promise<string>}
-   */
-  function testPost(url) {
-    return fetch(url, {
-      method: "POST",
-      cache: "no-cache",
-      body: makeParams({ tool: "ping", note: "manual test from activity-image-slideshow" }),
-    })
-      .then(function (res) {
-        return res.text().then(function (text) {
-          return "HTTP " + res.status + ": " + text.slice(0, 300);
-        });
-      })
-      .catch(function (err) {
-        return "Error: " + String(err && err.message ? err.message : err);
-      });
   }
 
   function wireForm() {
@@ -148,8 +131,8 @@
       }
       if (st) {
         st.textContent = isOn()
-          ? "Saved. Each vote is sent to your endpoint (use Test send to verify)."
-          : "Saved. Turn on the checkbox and paste a valid Web app URL to enable logging.";
+          ? "Saved. Each vote will be posted to your Google Form."
+          : "Saved. Turn on the checkbox and paste the form URL to enable logging.";
       }
     });
 
@@ -158,31 +141,25 @@
       testBtn.addEventListener("click", function () {
         const url = getEndpoint().trim();
         if (!url) {
-          if (st) st.textContent = "Paste a Web app URL first.";
+          if (st) st.textContent = "Paste the Google Form formResponse URL first.";
           return;
         }
         if (!isOn()) {
           if (st) st.textContent = "Turn on \u201cSend each\u2026\u201d and click Save logging settings first.";
           return;
         }
-        if (st) st.textContent = "Sending\u2026";
-        testPost(url).then(function (result) {
-          if (!st) return;
-          if (result.includes('"ok":true')) {
-            st.textContent =
-              "\u2713 Success \u2014 " +
-              result +
-              " \u00b7 Check Apps Script \u2192 Executions and your Votes sheet.";
-          } else if (result.startsWith("Error:")) {
-            st.textContent =
-              result +
-              " \u00b7 Likely cause: wrong Web app URL, or \u201cWho has access\u201d is not set to Anyone in the Apps Script deployment.";
-          } else {
-            st.textContent =
-              result +
-              " \u00b7 Unexpected response \u2014 check Apps Script \u2192 Executions for the error.";
-          }
-        });
+        fetch(url, {
+          method: "POST",
+          mode: "no-cors",
+          cache: "no-cache",
+          body: makeParams({ tool: "ping", note: "manual test from activity-image-slideshow" }),
+        }).catch(function () {});
+        if (st) {
+          st.textContent =
+            "Test ping sent (no-cors \u2014 browser cannot confirm delivery). " +
+            "Open your linked Google Sheet: you should see a new row with tool: ping within a few seconds. " +
+            "If nothing appears, the URL is wrong \u2014 it must end with /formResponse, not /viewform.";
+        }
       });
     }
   }

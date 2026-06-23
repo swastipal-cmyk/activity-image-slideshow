@@ -41,7 +41,12 @@
     .stat .val.green { color: var(--green); }
     .stat .val.red { color: var(--red); }
 
-    /* filter row */
+    .summary-note {
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin: -0.75rem 0 1.25rem;
+      max-width: 52rem;
+    }
     .filter-row { display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap; align-items: center; }
     .filter-row span { font-size: 0.8rem; color: var(--muted); margin-right: 0.25rem; }
     .filter-row button { padding: 0.25rem 0.75rem; font-size: 0.8rem; }
@@ -166,12 +171,14 @@
 
   <div id="results" style="display:none">
     <div class="summary" id="summaryStrip"></div>
+    <p class="summary-note" id="summaryNote"></p>
     <div class="filter-row">
       <span>Show:</span>
       <button class="sec active" data-filter="all">All</button>
-      <button class="sec" data-filter="agree">Majority agrees with Rank 1</button>
-      <button class="sec" data-filter="disagree">Majority disagrees</button>
-      <button class="sec" data-filter="split">Split</button>
+      <button class="sec" data-filter="one">Single reviewer only</button>
+      <button class="sec" data-filter="agree">2+ reviewers · agrees with Rank 1</button>
+      <button class="sec" data-filter="disagree">2+ reviewers · disagrees</button>
+      <button class="sec" data-filter="split">2+ reviewers · split</button>
       <input type="search" id="searchBox" placeholder="Search activity…" />
     </div>
     <div class="tbl-wrap">
@@ -203,6 +210,7 @@
   const errBox = $("errBox");
   const results = $("results");
   const summaryStrip = $("summaryStrip");
+  const summaryNote = $("summaryNote");
   const tableBody = $("tableBody");
   const searchBox = $("searchBox");
 
@@ -380,16 +388,27 @@
 
   function renderSummary(rows) {
     const total = rows.length;
+    const one = rows.filter((r) => r.verdict === "one").length;
     const agree = rows.filter((r) => r.verdict === "agree").length;
     const disagree = rows.filter((r) => r.verdict === "disagree").length;
     const split = rows.filter((r) => r.verdict === "split").length;
-    const totalReviewers = new Set(/* computed below */);
+    const multi = agree + disagree + split;
     summaryStrip.innerHTML = [
-      stat(total, "Activities reviewed"),
-      stat(agree, "Majority agrees with Rank 1", "green"),
-      stat(disagree, "Majority disagrees", "red"),
-      stat(split, "Split vote", ""),
+      stat(total, "Activities with picks"),
+      stat(one, "Single reviewer only"),
+      stat(agree, "2+ reviewers · majority agrees with Rank 1", "green"),
+      stat(disagree, "2+ reviewers · majority disagrees", "red"),
+      stat(split, "2+ reviewers · split vote", ""),
     ].join("");
+    if (summaryNote) {
+      summaryNote.textContent =
+        one +
+        " + " +
+        multi +
+        " = " +
+        total +
+        " activities. Agree / disagree / split only apply when two or more reviewers picked the same activity; otherwise it counts as single reviewer only.";
+    }
   }
 
   function stat(val, lbl, cls) {

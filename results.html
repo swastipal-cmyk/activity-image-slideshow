@@ -372,6 +372,8 @@
         .sort(([rA, dA], [rB, dB]) => dB.count - dA.count || Number(rA) - Number(rB))
         .map(([rank, d]) => ({ rank: Number(rank), url: d.url, count: d.count }));
 
+      const preferredImageUrl = sortedImages[0]?.url || "";
+
       result.push({
         activityId,
         activityTitle: picks.find((p) => p.activityTitle)?.activityTitle || activityId,
@@ -379,8 +381,7 @@
         rank1Count,
         pctRank1,
         majorityRank: majority,
-        originalHeroImageId: rank1ImageUrl ? 1 : null,
-        preferredHeroImageId: majority,
+        preferredImageUrl,
         verdict,
         rank1ImageUrl,
         sortedImages,
@@ -456,21 +457,21 @@
     const headers = [
       "activity_id",
       "activity_title",
-      "original_hero_image_id",
-      "preferred_hero_image_id",
+      "current_hero_image_url",
+      "preferred_hero_image_url",
       "reviewer_count",
-      "preferred_matches_original",
     ];
     const lines = [headers.join(",")];
     for (const r of reportRows) {
+      const preferredUrl =
+        r.majorityRank === 1 ? "" : r.preferredImageUrl || "";
       lines.push(
         [
           csvCell(r.activityId),
           csvCell(r.activityTitle),
-          csvCell(r.originalHeroImageId ?? ""),
-          csvCell(r.preferredHeroImageId),
+          csvCell(r.rank1ImageUrl),
+          csvCell(preferredUrl),
           csvCell(r.totalPicks),
-          csvCell(r.preferredHeroImageId === 1 ? "TRUE" : "FALSE"),
         ].join(","),
       );
     }

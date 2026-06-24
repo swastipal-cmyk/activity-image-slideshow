@@ -180,6 +180,7 @@
       <button class="sec" data-filter="disagree">2+ reviewers · disagrees</button>
       <button class="sec" data-filter="split">2+ reviewers · split</button>
       <input type="search" id="searchBox" placeholder="Search activity…" />
+      <button type="button" id="btnDownloadReport" class="sec">Download report (CSV)</button>
     </div>
     <div class="tbl-wrap">
       <table id="mainTable">
@@ -213,6 +214,7 @@
   const summaryNote = $("summaryNote");
   const tableBody = $("tableBody");
   const searchBox = $("searchBox");
+  const btnDownloadReport = $("btnDownloadReport");
 
   let allRows = [];
   let sortCol = "reviewers";
@@ -343,9 +345,12 @@
       const rank1Count = rankCounts[1] || 0;
       const pctRank1 = totalPicks ? rank1Count / totalPicks : 0;
 
-      // majority rank
-      const majorityRank = Object.entries(rankCounts).sort((a, b) => b[1] - a[1])[0][0];
-      const majorityCount = rankCounts[majorityRank];
+      // majority rank (ties: highest vote count, then lowest rank number)
+      const majorityEntry = Object.entries(rankCounts).sort(
+        (a, b) => b[1] - a[1] || Number(a[0]) - Number(b[0]),
+      )[0];
+      const majorityRank = majorityEntry[0];
+      const majorityCount = majorityEntry[1];
       const majority = Number(majorityRank);
 
       // verdict
@@ -374,6 +379,8 @@
         rank1Count,
         pctRank1,
         majorityRank: majority,
+        originalHeroImageId: rank1ImageUrl ? 1 : null,
+        preferredHeroImageId: majority,
         verdict,
         rank1ImageUrl,
         sortedImages,
@@ -434,6 +441,46 @@
   }
 
   function esc(s) { return String(s).replace(/"/g, "&quot;").replace(/</g, "&lt;"); }
+
+  function csvCell(v) {
+    const s = v == null ? "" : String(v);
+    if (/[",\n\r]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+    return s;
+  }
+
+  function downloadReportCsv() {
+    if (!allRows.length) return;
+    const reportRows = [...allRows].sort((a, b) =>
+      a.activityTitle.localeCompare(b.activityTitle, undefined, { sensitivity: "base" }),
+    );
+    const headers = [
+      "activity_id",
+      "activity_title",
+      "original_hero_image_id",
+      "preferred_hero_image_id",
+      "reviewer_count",
+      "preferred_matches_original",
+    ];
+    const lines = [headers.join(",")];
+    for (const r of reportRows) {
+      lines.push(
+        [
+          csvCell(r.activityId),
+          csvCell(r.activityTitle),
+          csvCell(r.originalHeroImageId ?? ""),
+          csvCell(r.preferredHeroImageId),
+          csvCell(r.totalPicks),
+          csvCell(r.preferredHeroImageId === 1 ? "TRUE" : "FALSE"),
+        ].join(","),
+      );
+    }
+    const blob = new Blob([lines.join("\n") + "\n"], { type: "text/csv;charset=utf-8" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "hero-image-review-report.csv";
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
 
   function barHtml(rank1Count, total) {
     if (!total) return "";
@@ -553,6 +600,10 @@
   });
 
   searchBox.addEventListener("input", renderTable);
+
+  if (btnDownloadReport) {
+    btnDownloadReport.addEventListener("click", downloadReportCsv);
+  }
 
   document.querySelectorAll("[data-filter]").forEach((btn) => {
     btn.addEventListener("click", () => {
